@@ -53,3 +53,13 @@ jobs:
 
       - name: Run flake checks
         run: nix flake check --accept-flake-config --print-build-logs
+
+      - name: Build reusable outputs
+        if: github.event_name != 'pull_request'
+        run: |
+          nix build \
+            .#packages.x86_64-linux.default \
+            .#packages.x86_64-linux.mcp \
+            .#devShells.x86_64-linux.default \
+            --accept-flake-config \
+            --print-build-logs

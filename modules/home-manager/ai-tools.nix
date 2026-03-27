@@ -21,6 +21,7 @@ let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   aiTools = import ../../ai-tools { inherit lib pkgs; };
   mcp = import ../../lib/mcp.nix { inherit inputs lib pkgs; };
+  packageSets = import ../../lib/packages.nix { inherit inputs lib pkgs; };
 
   mkServerOption = description: default: {
     enable = mkEnableOption description // {
@@ -94,20 +95,6 @@ let
   // lib.optionalAttrs (cfg.nixos.flakePath != null && cfg.nixos.configurationName != null) {
     options.nixos.expr = ''(builtins.getFlake "${cfg.nixos.flakePath}").nixosConfigurations.${cfg.nixos.configurationName}.options'';
   };
-
-  sharedAgentPackages = [
-    llmAgents.agent-browser
-    llmAgents.claude-plugins
-    pkgs.coreutils
-    pkgs.jq
-  ];
-
-  serenaSupportPackages = [
-    pkgs.gopls
-    pkgs.nixd
-    pkgs.rustup
-    pkgs.zls
-  ];
 
   gitIgnores =
     optional cfg.tools.claudeCode.enable ".claude/"
@@ -223,16 +210,16 @@ in
 
   config = mkIf cfg.enable (mkMerge [
     {
-      home.packages = sharedAgentPackages;
+      home.packages = packageSets.sharedAgentPackages;
       programs.git.ignores = lib.mkAfter gitIgnores;
     }
 
     (mkIf cfg.mcp.servers.serena.enable {
-      home.packages = serenaSupportPackages;
+      home.packages = packageSets.serenaSupportPackages;
     })
 
     (mkIf cfg.tools.claudeCode.enable {
-      home.packages = [ llmAgents.ccusage ];
+      home.packages = packageSets.claudeCodeHelperPackages;
 
       programs.claude-code = {
         enable = true;
@@ -333,7 +320,7 @@ in
     })
 
     (mkIf cfg.tools.codex.enable {
-      home.packages = [ llmAgents.ccusage-codex ];
+      home.packages = packageSets.codexHelperPackages;
 
       home.file = codexHomeFiles;
 
@@ -344,10 +331,7 @@ in
     })
 
     (mkIf cfg.tools.opencode.enable {
-      home.packages = [
-        llmAgents.ccusage-opencode
-        llmAgents.oh-my-opencode
-      ];
+      home.packages = packageSets.opencodeHelperPackages;
 
       programs.opencode = {
         enable = true;

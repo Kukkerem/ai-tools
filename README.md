@@ -29,6 +29,12 @@ Available MCP toggles:
 
 - `homeManagerModules.default`
 - `homeManagerModules.ai-tools`
+- `packages.<system>.default`
+- `packages.<system>.mcp`
+- `packages.<system>.claude-code`
+- `packages.<system>.codex`
+- `packages.<system>.opencode`
+- `devShells.<system>.default`
 - `templates.local-dev`
 
 ## Home Manager usage
@@ -96,6 +102,17 @@ nix flake init -t github:your-org/ai-tools#local-dev
 ```
 
 Or inspect the bundled template in `templates/local-dev`.
+
+## Direct shell usage
+
+You can also use the flake directly as a development shell:
+
+```bash
+nix develop github:your-org/ai-tools
+```
+
+This shell provides the shared AI tool binaries and MCP-related runtime packages.
+For full generated config files, use the Home Manager module or the bundled template.
 
 ## Module options
 

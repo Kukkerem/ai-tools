@@ -29,7 +29,14 @@ jobs:
           name: ai-tools
 
       - name: Build release target
-        run: nix build .#checks.x86_64-linux.default --accept-flake-config --print-build-logs
+        run: |
+          nix build \
+            .#checks.x86_64-linux.default \
+            .#packages.x86_64-linux.default \
+            .#packages.x86_64-linux.mcp \
+            .#devShells.x86_64-linux.default \
+            --accept-flake-config \
+            --print-build-logs
 
   github-release:
     needs: build-and-cache

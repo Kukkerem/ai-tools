@@ -49,12 +49,20 @@
         f:
         nixpkgs.lib.genAttrs systems (
           system:
-          f (
-            import nixpkgs {
+          let
+            pkgs = import nixpkgs {
               inherit system;
               config.allowUnfree = true;
-            }
-          )
+            };
+          in
+          f {
+            inherit pkgs system;
+            lib = nixpkgs.lib;
+            packageSets = import ./lib/packages.nix {
+              inherit inputs pkgs;
+              lib = nixpkgs.lib;
+            };
+          }
         );
 
       aiToolsModule = import ./modules/home-manager { inherit inputs; };
@@ -66,7 +74,7 @@
       };
 
       formatter = forEachSystem (
-        pkgs:
+        { pkgs, ... }:
         pkgs.writeShellApplication {
           name = "format-ai-tools";
           runtimeInputs = [
@@ -83,37 +91,72 @@
         }
       );
 
-      checks = forEachSystem (pkgs: {
-        default =
-          (home-manager.lib.homeManagerConfiguration {
-            inherit pkgs;
-            modules = [
-              aiToolsModule
-              {
-                home.username = "tester";
-                home.homeDirectory = "/home/tester";
-                home.stateVersion = "25.05";
+      packages = forEachSystem (
+        {
+          packageSets,
+          ...
+        }:
+        {
+          default = packageSets.bundles.default;
+          mcp = packageSets.bundles.mcp;
+          claude-code = packageSets.toolPackages.claudeCode;
+          codex = packageSets.toolPackages.codex;
+          opencode = packageSets.toolPackages.opencode;
+        }
+      );
 
-                programs.ai-tools = {
-                  enable = true;
-                  tools = {
-                    claudeCode.enable = true;
-                    codex.enable = true;
-                    opencode.enable = true;
+      devShells = forEachSystem (
+        {
+          pkgs,
+          packageSets,
+          ...
+        }:
+        {
+          default = pkgs.mkShell {
+            packages = packageSets.devShellPackages;
+            shellHook = ''
+              echo "ai-tools dev shell ready"
+              echo "Available CLIs: claude, codex, opencode"
+              echo "This shell provides shared binaries only; use the Home Manager module for full config files."
+            '';
+          };
+        }
+      );
+
+      checks = forEachSystem (
+        { pkgs, ... }:
+        {
+          default =
+            (home-manager.lib.homeManagerConfiguration {
+              inherit pkgs;
+              modules = [
+                aiToolsModule
+                {
+                  home.username = "tester";
+                  home.homeDirectory = "/home/tester";
+                  home.stateVersion = "25.05";
+
+                  programs.ai-tools = {
+                    enable = true;
+                    tools = {
+                      claudeCode.enable = true;
+                      codex.enable = true;
+                      opencode.enable = true;
+                    };
+                    mcp.servers = {
+                      sequentialThinking.enable = true;
+                      git.enable = true;
+                      time.enable = true;
+                      memory.enable = true;
+                      serena.enable = true;
+                      filesystem.enable = true;
+                    };
                   };
-                  mcp.servers = {
-                    sequentialThinking.enable = true;
-                    git.enable = true;
-                    time.enable = true;
-                    memory.enable = true;
-                    serena.enable = true;
-                    filesystem.enable = true;
-                  };
-                };
-              }
-            ];
-          }).activationPackage;
-      });
+                }
+              ];
+            }).activationPackage;
+        }
+      );
 
       templates.local-dev = {
         path = ./templates/local-dev;
