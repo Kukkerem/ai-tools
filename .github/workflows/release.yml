@@ -7,15 +7,7 @@ on:
 
 jobs:
   build-and-cache:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: x86_64-linux
-            runs-on: ubuntu-latest
-          - system: x86_64-darwin
-            runs-on: macos-15-intel
-    runs-on: ${{ matrix.runs-on }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -24,15 +16,20 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            extra-substituters = https://cache.numtide.com https://ai-tools.cachix.org
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= ai-tools.cachix.org-1:4hlOyu6MVh7DhTl3dG4u1zlyhD834yElTL8bnPu4z2M=
 
       - name: Configure Cachix
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           name: ai-tools
 
-      - name: Build release check target
-        run: nix build .#checks.${{ matrix.system }}.default --print-build-logs
+      - name: Build release target
+        run: nix build .#checks.x86_64-linux.default --accept-flake-config --print-build-logs
 
   github-release:
     needs: build-and-cache
