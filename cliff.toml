@@ -10,7 +10,7 @@ body = """
 ### {{ group }}
 {% for commit in commits %}
 - {% if commit.breaking %}**BREAKING** {% endif %}{{ commit.message | upper_first }} \
-([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/zolszabo/ai-tools/commit/{{ commit.id }}))\
+([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/Kukkerem/ai-tools/commit/{{ commit.id }}))\
 {% endfor %}
 {% endfor %}\n
 """
