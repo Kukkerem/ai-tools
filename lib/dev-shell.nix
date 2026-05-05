@@ -56,13 +56,6 @@ let
       ];
       text = ''
         dev_home="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
-        original_home="''${AI_TOOLS_ORIGINAL_HOME:-}"
-
-        if [ -n "$original_home" ] && [ "$dev_home" = "$original_home" ] && [ "''${AI_TOOLS_DEVSHELL_ALLOW_REAL_HOME:-0}" != "1" ]; then
-          echo "Refusing to manage the real HOME as AI_TOOLS_DEV_HOME: $dev_home" >&2
-          echo "Use a project-local AI_TOOLS_DEV_HOME, or set AI_TOOLS_DEVSHELL_ALLOW_REAL_HOME=1 if this is intentional." >&2
-          exit 1
-        fi
 
         managed_paths=(
           "$dev_home/.agents"
@@ -92,22 +85,43 @@ let
       '';
     };
 
+  # Shell functions that wrap each AI tool to point config/state dirs at
+  # $AI_TOOLS_DEV_HOME without polluting global XDG/HOME vars for the shell.
+  # These are injected into mkStartup rather than added as package wrappers to
+  # avoid buildEnv collisions with the tool packages already in bundles.default.
+  toolWrapperFunctions = ''
+    claude() {
+      local dev_home="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
+      CLAUDE_CONFIG_DIR="$dev_home/.claude" command claude "$@"
+    }
+    opencode() {
+      local dev_home="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
+      OPENCODE_CONFIG_DIR="$dev_home/.config/opencode" \
+      OPENCODE_CONFIG="$dev_home/.config/opencode/opencode.jsonc" \
+      XDG_STATE_HOME="$dev_home/.local/state" \
+      XDG_DATA_HOME="$dev_home/.local/share" \
+      command opencode "$@"
+    }
+    codex() {
+      local dev_home="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
+      CODEX_HOME="$dev_home/.codex" command codex "$@"
+    }
+  '';
+
   mkStartup =
     {
       extraStartup ? "",
     }:
     ''
-      export AI_TOOLS_ORIGINAL_HOME="''${AI_TOOLS_ORIGINAL_HOME:-$HOME}"
       export AI_TOOLS_DEV_HOME="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
-      export HOME="$AI_TOOLS_DEV_HOME"
-      export XDG_CONFIG_HOME="$HOME/.config"
-      export CODEX_HOME="$HOME/.codex"
+
+      ${toolWrapperFunctions}
 
       ai-tools-devshell-install-config
 
       echo "ai-tools dev shell ready"
       echo "Project-local AI home: $AI_TOOLS_DEV_HOME"
-      echo "Available CLIs: claude, codex, opencode"
+      echo "Available CLIs: claude, codex, opencode (all scoped to AI_TOOLS_DEV_HOME)"
     ''
     + extraStartup;
 
