@@ -41,13 +41,17 @@ jobs:
             .#devShells.x86_64-linux.default \
             --no-link --print-out-paths \
             --accept-flake-config \
-            --print-build-logs | tail -1)
+            --print-build-logs \
+            | tee /tmp/store_paths.txt \
+            | tail -1)
           echo "store_path=$store_path" >> "$GITHUB_OUTPUT"
+          # Explicitly push all built paths so the pin step can find them
+          cachix push ai-tools < /tmp/store_paths.txt
 
       - name: Pin release output in Cachix
         run: |
           version="${GITHUB_REF_NAME#v}"
-          cachix pin ai-tools "ai-tools-${version}" '${{ steps.build.outputs.store_path }}'
+          cachix pin ai-tools "ai-tools-${version}" "${{ steps.build.outputs.store_path }}"
 
   github-release:
     name: GitHub release

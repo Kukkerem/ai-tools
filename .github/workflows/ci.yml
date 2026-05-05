@@ -58,7 +58,7 @@ jobs:
       - name: Run flake checks
         run: nix flake check --accept-flake-config --print-build-logs
 
-      - name: Build reusable outputs
+      - name: Build and cache reusable outputs
         id: build
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -68,10 +68,14 @@ jobs:
             .#devShells.x86_64-linux.default \
             --no-link --print-out-paths \
             --accept-flake-config \
-            --print-build-logs | tail -1)
+            --print-build-logs \
+            | tee /tmp/store_paths.txt \
+            | tail -1)
           echo "store_path=$store_path" >> "$GITHUB_OUTPUT"
+          # Explicitly push all built paths so the pin step can find them
+          cachix push ai-tools < /tmp/store_paths.txt
 
       - name: Pin latest output to Cachix
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          cachix pin ai-tools ai-tools-latest '${{ steps.build.outputs.store_path }}' --keep-revisions 1
+          cachix pin ai-tools ai-tools-latest "${{ steps.build.outputs.store_path }}" --keep-revisions 1
