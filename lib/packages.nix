@@ -7,6 +7,7 @@ let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   upstreamMcpPackages = inputs.mcp-servers-nix.packages.${pkgs.stdenv.hostPlatform.system};
   mcpNixosPackage = inputs.mcp-nixos.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  mcpSupport = import ./mcp.nix { inherit inputs lib pkgs; };
 
   browserPackages =
     lib.optionals pkgs.stdenv.isLinux [ pkgs.chromium ]
@@ -26,9 +27,17 @@ let
     pkgs.jq
   ];
 
+  # Core language server support for Serena code intelligence.
   serenaSupportPackages = [
     pkgs.gopls
     pkgs.nixd
+  ];
+
+  # Rust toolchain for Serena Rust project support. Included in the devshell bundle
+  # but not automatically added by the HM module unless explicitly requested via
+  # `home.packages`. Users who need Rust support should add these via
+  # `home.packages = with pkgs; [ rustup zls ];` or enable via the module option.
+  serenaRustPackages = [
     pkgs.rustup
     pkgs.zls
   ];
@@ -37,10 +46,7 @@ let
 
   codexHelperPackages = [ llmAgents.ccusage-codex ];
 
-  opencodeHelperPackages = [
-    llmAgents.ccusage-opencode
-    llmAgents.oh-my-opencode
-  ];
+  opencodeHelperPackages = [ llmAgents.ccusage-opencode ];
 
   opencodeRuntimePackages = [
     pkgs.bash-language-server
@@ -50,10 +56,17 @@ let
     pkgs.vscode-langservers-extracted
     pkgs.yaml-language-server
   ]
-  ++ serenaSupportPackages;
+  ++ serenaSupportPackages
+  ++ serenaRustPackages;
 
   mcpRuntimePackages = [
+    mcpSupport.basicMemoryPackage
+    mcpSupport.mcpServerFetchFixed
+    mcpSupport.notebooklmPackage
     mcpNixosPackage
+    pkgs.terraform-mcp-server
+    pkgs.uv
+    upstreamMcpPackages.context7-mcp
     upstreamMcpPackages.mcp-server-filesystem
     upstreamMcpPackages.mcp-server-git
     upstreamMcpPackages.mcp-server-memory
@@ -73,6 +86,7 @@ let
   defaultPackages = lib.unique (
     sharedAgentPackages
     ++ serenaSupportPackages
+    ++ serenaRustPackages
     ++ claudeCodeHelperPackages
     ++ codexHelperPackages
     ++ opencodeHelperPackages
@@ -93,6 +107,7 @@ in
     mcpRuntimePackages
     opencodeHelperPackages
     opencodeRuntimePackages
+    serenaRustPackages
     serenaSupportPackages
     sharedAgentPackages
     toolPackages

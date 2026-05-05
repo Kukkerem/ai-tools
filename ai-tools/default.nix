@@ -1,4 +1,8 @@
-{ lib, pkgs, ... }:
+{
+  inputs,
+  lib,
+  pkgs,
+}:
 
 let
   inherit (lib)
@@ -8,9 +12,9 @@ let
     nameValuePair
     ;
 
-  aiCommands = import ./commands.nix { inherit lib; };
+  aiCommands = import ./commands.nix { inherit inputs lib; };
   aiAgents = import ./agents.nix { inherit lib; };
-  aiSkills = import ./skills.nix { inherit lib pkgs; };
+  aiSkills = import ./skills.nix { inherit inputs lib pkgs; };
 
   capitalize =
     word:

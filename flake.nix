@@ -1,6 +1,10 @@
 {
   description = "Reusable Home Manager AI tools flake with optional MCP servers";
 
+  # Bumped by scripts/release.sh on each release tag.
+  # Keep in sync with the git tag: v<version>.
+  version = "0.1.0";
+
   nixConfig = {
     extra-substituters = [
       "https://cache.numtide.com"
@@ -20,6 +24,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    devshell = {
+      url = "github:numtide/devshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     llm-agents.url = "github:numtide/llm-agents.nix";
 
     mcp-servers-nix = {
@@ -28,6 +37,13 @@
     };
 
     mcp-nixos.url = "github:utensils/mcp-nixos";
+
+    caveman = {
+      url = "github:JuliusBrussee/caveman/ef6050c5e1848b6880ff47c32ade1a608a64f85e";
+      flake = false;
+    };
+
+    mcp-openrouter-search.url = "github:Kukkerem/mcp-openrouter-search/v0.1.4";
   };
 
   outputs =
@@ -66,11 +82,36 @@
         );
 
       aiToolsModule = import ./modules/home-manager { inherit inputs; };
+      devShellSupport = import ./lib/dev-shell.nix {
+        inherit inputs home-manager;
+        lib = nixpkgs.lib;
+      };
     in
     {
+      lib = {
+        inherit (devShellSupport)
+          mkAiToolsDevShell
+          mkAiToolsDevshellConfig
+          ;
+      };
+
+      flakeModules = {
+        default = import ./flake-modules/devshell.nix { inherit devShellSupport inputs; };
+        ai-tools-devshell = import ./flake-modules/devshell.nix { inherit devShellSupport inputs; };
+      };
+
       homeManagerModules = {
         default = aiToolsModule;
         ai-tools = aiToolsModule;
+      };
+
+      # Convenience wrapper for NixOS configurations that already import
+      # home-manager as a NixOS module. Add to your NixOS modules list and
+      # the ai-tools Home Manager module becomes available to every user
+      # configured via `home-manager.users.<name>`.
+      nixosModules = {
+        default = import ./modules/nixos { inherit inputs; };
+        ai-tools = import ./modules/nixos { inherit inputs; };
       };
 
       formatter = forEachSystem (
@@ -106,25 +147,14 @@
       );
 
       devShells = forEachSystem (
+        { pkgs, ... }:
         {
-          pkgs,
-          packageSets,
-          ...
-        }:
-        {
-          default = pkgs.mkShell {
-            packages = packageSets.devShellPackages;
-            shellHook = ''
-              echo "ai-tools dev shell ready"
-              echo "Available CLIs: claude, codex, opencode"
-              echo "This shell provides shared binaries only; use the Home Manager module for full config files."
-            '';
-          };
+          default = devShellSupport.mkAiToolsDevShell { inherit pkgs; };
         }
       );
 
       checks = forEachSystem (
-        { pkgs, ... }:
+        { lib, pkgs, ... }:
         {
           default =
             (home-manager.lib.homeManagerConfiguration {
@@ -143,13 +173,35 @@
                       codex.enable = true;
                       opencode.enable = true;
                     };
-                    mcp.servers = {
-                      sequentialThinking.enable = true;
-                      git.enable = true;
-                      time.enable = true;
-                      memory.enable = true;
-                      serena.enable = true;
-                      filesystem.enable = true;
+                    tools.opencode = {
+                      settings.theme = "catppuccin";
+                      dcp.settings.compress.minContextLimit = 42000;
+                      rtk = {
+                        excludeCommands = [ "nix flake metadata" ];
+                        tee = {
+                          enable = true;
+                          mode = "failures";
+                        };
+                        telemetry.enable = false;
+                      };
+                    };
+                    mcp = {
+                      servers = {
+                        sequentialThinking.enable = true;
+                        git.enable = true;
+                        context7.enable = true;
+                        time.enable = true;
+                        memory.enable = true;
+                        serena.enable = true;
+                        filesystem.enable = true;
+                        deepwiki.enable = true;
+                      };
+                      serverOverrides.deepwiki = {
+                        url = "https://mcp.deepwiki.com/mcp";
+                      };
+                      extraServers.example-local = {
+                        command = lib.getExe pkgs.hello;
+                      };
                     };
                   };
                 }
