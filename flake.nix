@@ -1,10 +1,6 @@
 {
   description = "Reusable Home Manager AI tools flake with optional MCP servers";
 
-  # Bumped by scripts/release.sh on each release tag.
-  # Keep in sync with the git tag: v<version>.
-  version = "0.1.0";
-
   nixConfig = {
     extra-substituters = [
       "https://cache.numtide.com"
@@ -54,6 +50,10 @@
       ...
     }:
     let
+      # Bumped by scripts/release.sh on each release tag.
+      # Keep in sync with the git tag: v<version>.
+      version = "0.1.0";
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
