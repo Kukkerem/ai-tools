@@ -86,6 +86,21 @@
         inherit inputs home-manager;
         lib = nixpkgs.lib;
       };
+
+      mkTestChecks =
+        { lib, pkgs }:
+        {
+          lib-tests = import ./tests/lib.nix { inherit inputs lib pkgs; };
+          home-manager-tests = import ./tests/home-manager.nix {
+            inherit
+              aiToolsModule
+              inputs
+              lib
+              pkgs
+              ;
+          };
+          nixos-module-tests = import ./tests/nixos.nix { inherit inputs pkgs; };
+        };
     in
     {
       lib = {
@@ -155,7 +170,8 @@
 
       checks = forEachSystem (
         { lib, pkgs, ... }:
-        {
+        (mkTestChecks { inherit lib pkgs; })
+        // {
           default =
             (home-manager.lib.homeManagerConfiguration {
               inherit pkgs;
