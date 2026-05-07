@@ -196,7 +196,19 @@
                         extraRuntimePackages = [ pkgs.hello ];
                         dcp.settings.compress.minContextLimit = 50000;
                         rtk.excludeCommands = [ "cat" ];
-                        mcp.memoryDir = "opencode-work";
+                        mcp = {
+                          memoryDir = "opencode-work";
+                          servers = {
+                            context7.enable = false;
+                            openrouterSearch = {
+                              enable = true;
+                              apiKeyFile = "/run/secrets/openrouter-work-api-key";
+                            };
+                          };
+                          extraServers.cloudflare-docs = {
+                            url = "https://docs.mcp.cloudflare.com/mcp";
+                          };
+                        };
                         extraFiles."plugin-config.jsonc".value = {
                           enabled = true;
                           nested.option = "value";

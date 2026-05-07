@@ -380,7 +380,19 @@ programs.ai-tools.tools.opencode = {
     dcp.settings.compress.minContextLimit = 50000;
     rtk.excludeCommands = [ "cat" ];
 
-    mcp.memoryDir = "opencode-work";
+    mcp = {
+      memoryDir = "opencode-work";
+      servers = {
+        context7.enable = false;
+        openrouterSearch = {
+          enable = true;
+          apiKeyFile = config.sops.secrets.openrouter-work-api-key.path;
+        };
+      };
+      extraServers.cloudflare-docs = {
+        url = "https://docs.mcp.cloudflare.com/mcp";
+      };
+    };
   };
 };
 ```
@@ -392,6 +404,11 @@ its profile. `XDG_DATA_HOME` and `XDG_STATE_HOME` are exported when `dataDir` or
 `extraFiles` entries are relative to the profile config directory. Use `text` or
 `source` for normal Home Manager file forms, or `value` to render an attrset as
 JSON for plugin config files.
+
+Profile MCP settings inherit from global `programs.ai-tools.mcp` defaults.
+Per-profile `mcp.servers.<name>.enable`, OpenRouter secret settings,
+`serverOverrides`, and `extraServers` override or extend the global MCP config
+for that OpenCode profile only.
 
 To wire NixOS options into OpenCode's `nixd` setup:
 

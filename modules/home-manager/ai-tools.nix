@@ -33,6 +33,14 @@ let
     };
   };
 
+  mkProfileServerOption = description: {
+    enable = mkOption {
+      type = types.nullOr types.bool;
+      default = null;
+      description = "Optional per-profile override for ${description}.";
+    };
+  };
+
   mkProgramOption =
     programName:
     mkOption {
@@ -44,54 +52,98 @@ let
       '';
     };
 
-  enabledMcpServerNames =
-    optionals cfg.mcp.servers.sequentialThinking.enable [ "sequential-thinking" ]
-    ++ optionals cfg.mcp.servers.git.enable [ "git" ]
-    ++ optionals cfg.mcp.servers.context7.enable [ "context7" ]
-    ++ optionals cfg.mcp.servers.nixos.enable [ "nixos" ]
-    ++ optionals cfg.mcp.servers.time.enable [ "time" ]
-    ++ optionals cfg.mcp.servers.fetch.enable [ "fetch" ]
-    ++ optionals cfg.mcp.servers.memory.enable [ "memory" ]
-    ++ optionals cfg.mcp.servers.serena.enable [ "serena" ]
-    ++ optionals cfg.mcp.servers.playwright.enable [ "playwright" ]
-    ++ optionals cfg.mcp.servers.filesystem.enable [ "filesystem" ]
-    ++ optionals cfg.mcp.servers.notebooklm.enable [ "notebooklm" ]
-    ++ optionals cfg.mcp.servers.basicMemory.enable [ "basic-memory" ]
-    ++ optionals cfg.mcp.servers.terraform.enable [ "terraform" ]
-    ++ optionals cfg.mcp.servers.qmd.enable [ "qmd" ]
-    ++ optionals cfg.mcp.servers.deepwiki.enable [ "deepwiki" ]
-    ++ optionals cfg.mcp.servers.exa.enable [ "exa" ]
-    ++ optionals cfg.mcp.servers.openrouterSearch.enable [ "openrouter-search" ];
+  mkMcpServerEnable =
+    server: profileServer: if profileServer.enable != null then profileServer.enable else server.enable;
+
+  mkEnabledMcpServerNames =
+    profileMcp:
+    optionals
+      (mkMcpServerEnable cfg.mcp.servers.sequentialThinking profileMcp.servers.sequentialThinking)
+      [
+        "sequential-thinking"
+      ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.git profileMcp.servers.git) [ "git" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.context7 profileMcp.servers.context7) [ "context7" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.nixos profileMcp.servers.nixos) [ "nixos" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.time profileMcp.servers.time) [ "time" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.fetch profileMcp.servers.fetch) [ "fetch" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.memory profileMcp.servers.memory) [ "memory" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.serena profileMcp.servers.serena) [ "serena" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.playwright profileMcp.servers.playwright) [
+      "playwright"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.filesystem profileMcp.servers.filesystem) [
+      "filesystem"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.notebooklm profileMcp.servers.notebooklm) [
+      "notebooklm"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.basicMemory profileMcp.servers.basicMemory) [
+      "basic-memory"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.terraform profileMcp.servers.terraform) [
+      "terraform"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.qmd profileMcp.servers.qmd) [ "qmd" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.deepwiki profileMcp.servers.deepwiki) [ "deepwiki" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.exa profileMcp.servers.exa) [ "exa" ]
+    ++
+      optionals (mkMcpServerEnable cfg.mcp.servers.openrouterSearch profileMcp.servers.openrouterSearch)
+        [
+          "openrouter-search"
+        ];
+
+  defaultProfileMcp = {
+    serverOverrides = { };
+    extraServers = { };
+    servers = lib.recursiveUpdate (lib.mapAttrs (_: _: { enable = null; }) cfg.mcp.servers) {
+      qmd.url = null;
+      openrouterSearch = {
+        apiKey = null;
+        apiKeyFile = null;
+        env = { };
+      };
+    };
+  };
+
+  globalMcpForTools = defaultProfileMcp;
+
+  mkProfileMcpConfig =
+    profileMcp:
+    let
+      profileOpenrouter = profileMcp.servers.openrouterSearch;
+      hasProfileOpenrouterSecret =
+        profileOpenrouter.apiKey != null || profileOpenrouter.apiKeyFile != null;
+    in
+    {
+      enabledServerNames = mkEnabledMcpServerNames profileMcp;
+      filesystemAllowedPaths = cfg.mcp.filesystem.allowedPaths;
+      memoryBaseDir = cfg.mcp.memoryBaseDir;
+      memoryDir = profileMcp.memoryDir;
+      qmdUrl =
+        if profileMcp.servers.qmd.url != null then profileMcp.servers.qmd.url else cfg.mcp.servers.qmd.url;
+      openrouterSearchApiKey =
+        if hasProfileOpenrouterSecret then
+          profileOpenrouter.apiKey
+        else
+          cfg.mcp.servers.openrouterSearch.apiKey;
+      openrouterSearchApiKeyFile =
+        if hasProfileOpenrouterSecret then
+          profileOpenrouter.apiKeyFile
+        else
+          cfg.mcp.servers.openrouterSearch.apiKeyFile;
+      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env // profileOpenrouter.env;
+      serverOverrides = cfg.mcp.serverOverrides // profileMcp.serverOverrides;
+      extraServers = cfg.mcp.extraServers // profileMcp.extraServers;
+    };
 
   mkToolMcpServers =
     toolName: builder:
-    builder {
-      enabledServerNames = enabledMcpServerNames;
-      filesystemAllowedPaths = cfg.mcp.filesystem.allowedPaths;
-      memoryBaseDir = cfg.mcp.memoryBaseDir;
-      memoryDir = "${cfg.profileName}-${toolName}";
-      qmdUrl = cfg.mcp.servers.qmd.url;
-      openrouterSearchApiKey = cfg.mcp.servers.openrouterSearch.apiKey;
-      openrouterSearchApiKeyFile = cfg.mcp.servers.openrouterSearch.apiKeyFile;
-      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env;
-      serverOverrides = cfg.mcp.serverOverrides;
-      extraServers = cfg.mcp.extraServers;
-    };
+    builder (
+      mkProfileMcpConfig (globalMcpForTools // { memoryDir = "${cfg.profileName}-${toolName}"; })
+    );
 
-  mkOpencodeMcpServers =
-    memoryDir:
-    mcp.forOpenCode {
-      enabledServerNames = enabledMcpServerNames;
-      filesystemAllowedPaths = cfg.mcp.filesystem.allowedPaths;
-      memoryBaseDir = cfg.mcp.memoryBaseDir;
-      inherit memoryDir;
-      qmdUrl = cfg.mcp.servers.qmd.url;
-      openrouterSearchApiKey = cfg.mcp.servers.openrouterSearch.apiKey;
-      openrouterSearchApiKeyFile = cfg.mcp.servers.openrouterSearch.apiKeyFile;
-      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env;
-      serverOverrides = cfg.mcp.serverOverrides;
-      extraServers = cfg.mcp.extraServers;
-    };
+  mkOpencodeMcpServers = profileMcp: mcp.forOpenCode (mkProfileMcpConfig profileMcp);
 
   instructions = builtins.readFile ../../base.md;
 
@@ -277,7 +329,7 @@ let
     profile:
     mkOpencodeDefaultSettings profile
     // optionalAttrs profile.mcp.enable {
-      mcp = mkOpencodeMcpServers profile.mcp.memoryDir;
+      mcp = mkOpencodeMcpServers profile.mcp;
     }
     // optionalAttrs (profile.model != null) {
       model = profile.model;
@@ -397,7 +449,8 @@ let
     mcp = {
       enable = true;
       memoryDir = "${cfg.profileName}-opencode";
-    };
+    }
+    // defaultProfileMcp;
     extraFiles = { };
     extraRuntimePackages = [ ];
   };
@@ -407,6 +460,7 @@ let
     let
       baseProfile =
         if name == "default" then lib.recursiveUpdate legacyOpencodeProfile profile else profile;
+      baseProfileMcp = lib.recursiveUpdate defaultProfileMcp baseProfile.mcp;
     in
     baseProfile
     // {
@@ -425,9 +479,8 @@ let
         else
           ".config/opencode-${name}";
       mcp =
-        legacyOpencodeProfile.mcp
-        // baseProfile.mcp
-        // optionalAttrs (baseProfile.mcp.memoryDir == null) {
+        baseProfileMcp
+        // optionalAttrs (baseProfileMcp.memoryDir == null) {
           memoryDir =
             if name == "default" then
               legacyOpencodeProfile.mcp.memoryDir
@@ -932,10 +985,67 @@ in
                     enable = mkEnableOption "generated MCP server config for this profile" // {
                       default = true;
                     };
+
                     memoryDir = mkOption {
                       type = types.nullOr types.str;
                       default = null;
                       description = "MCP memory directory name for this profile.";
+                    };
+
+                    serverOverrides = mkOption {
+                      type = types.attrsOf types.anything;
+                      default = { };
+                      description = "Per-profile MCP server overrides merged over global overrides.";
+                    };
+
+                    extraServers = mkOption {
+                      type = types.attrsOf types.anything;
+                      default = { };
+                      description = "Per-profile MCP extra servers merged with global extra servers.";
+                    };
+
+                    servers = {
+                      sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server";
+                      git = mkProfileServerOption "the git MCP server";
+                      context7 = mkProfileServerOption "the Context7 MCP server";
+                      nixos = mkProfileServerOption "the nixos MCP server";
+                      time = mkProfileServerOption "the time MCP server";
+                      fetch = mkProfileServerOption "the fetch MCP server";
+                      memory = mkProfileServerOption "the memory MCP server";
+                      serena = mkProfileServerOption "the serena MCP server";
+                      playwright = mkProfileServerOption "the playwright MCP server";
+                      filesystem = mkProfileServerOption "the filesystem MCP server";
+                      notebooklm = mkProfileServerOption "the NotebookLM MCP server";
+                      basicMemory = mkProfileServerOption "the Basic Memory MCP server";
+                      terraform = mkProfileServerOption "the Terraform MCP server";
+                      qmd = mkProfileServerOption "the QMD MCP server" // {
+                        url = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile QMD MCP URL override.";
+                        };
+                      };
+                      deepwiki = mkProfileServerOption "the DeepWiki MCP server";
+                      exa = mkProfileServerOption "the Exa MCP server";
+                      openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server" // {
+                        apiKey = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile literal OpenRouter API key override.";
+                        };
+
+                        apiKeyFile = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile file containing the OpenRouter API key.";
+                        };
+
+                        env = mkOption {
+                          type = types.attrsOf types.str;
+                          default = { };
+                          description = "Additional per-profile environment for the OpenRouter Search MCP server.";
+                        };
+                      };
                     };
                   };
                 };
