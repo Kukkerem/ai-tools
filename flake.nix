@@ -184,6 +184,19 @@
                         };
                         telemetry.enable = false;
                       };
+                      profiles.work = {
+                        commandName = "ocw";
+                        runCommandName = "ocw-run";
+                        configDir = ".config/opencode-work";
+                        dataDir = ".local/share/opencode-work";
+                        stateDir = ".local/state/opencode-work";
+                        theme = "nightowl";
+                        plugins = [ "example-opencode-plugin@latest" ];
+                        settings.experimental = true;
+                        dcp.settings.compress.minContextLimit = 50000;
+                        rtk.excludeCommands = [ "cat" ];
+                        mcp.memoryDir = "opencode-work";
+                      };
                     };
                     mcp = {
                       servers = {
