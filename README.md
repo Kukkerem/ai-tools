@@ -368,6 +368,15 @@ programs.ai-tools.tools.opencode = {
     plugins = [ "my-work-plugin@latest" ];
     settings.experimental = true;
 
+    extraRuntimePackages = [
+      inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.oh-my-opencode
+    ];
+    extraFiles."base.md".text = builtins.readFile ./base.md;
+    extraFiles."plugin-config.jsonc".value = {
+      enabled = true;
+      nested.option = "value";
+    };
+
     dcp.settings.compress.minContextLimit = 50000;
     rtk.excludeCommands = [ "cat" ];
 
@@ -379,6 +388,10 @@ programs.ai-tools.tools.opencode = {
 Each generated wrapper exports `OPENCODE_CONFIG` and `OPENCODE_CONFIG_DIR` for
 its profile. `XDG_DATA_HOME` and `XDG_STATE_HOME` are exported when `dataDir` or
 `stateDir` are set.
+
+`extraFiles` entries are relative to the profile config directory. Use `text` or
+`source` for normal Home Manager file forms, or `value` to render an attrset as
+JSON for plugin config files.
 
 To wire NixOS options into OpenCode's `nixd` setup:
 

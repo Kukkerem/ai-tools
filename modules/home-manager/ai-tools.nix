@@ -320,6 +320,23 @@ let
     };
   };
 
+  mkOpencodeExtraFile =
+    profileName: path: file:
+    let
+      fileName = lib.replaceStrings [ "/" ] [ "-" ] path;
+    in
+    if file ? value then
+      builtins.removeAttrs file [
+        "source"
+        "text"
+        "value"
+      ]
+      // {
+        source = jsonFormat.generate "opencode-${profileName}-${fileName}" file.value;
+      }
+    else
+      file;
+
   mkOpencodeProfileFiles =
     name: profile:
     let
@@ -352,7 +369,7 @@ let
         };
       };
       extraFiles = lib.mapAttrs' (
-        path: file: lib.nameValuePair "${profile.configDir}/${path}" file
+        path: file: lib.nameValuePair "${profile.configDir}/${path}" (mkOpencodeExtraFile name path file)
       ) profile.extraFiles;
     in
     mkOpencodeProfileConfigFile name profile // sharedFiles // dcpConfig // rtkFiles // extraFiles;
@@ -793,7 +810,12 @@ in
                   extraFiles = mkOption {
                     type = types.attrsOf types.anything;
                     default = { };
-                    description = "Extra Home Manager `home.file` entries written under this profile's config directory.";
+                    description = ''
+                      Extra Home Manager `home.file` entries written under this
+                      profile's config directory. Entries support standard
+                      `home.file` forms such as `text` and `source`; entries
+                      with `value` are rendered as JSON.
+                    '';
                   };
 
                   extraRuntimePackages = mkOption {

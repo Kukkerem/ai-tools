@@ -193,9 +193,14 @@
                         theme = "nightowl";
                         plugins = [ "example-opencode-plugin@latest" ];
                         settings.experimental = true;
+                        extraRuntimePackages = [ pkgs.hello ];
                         dcp.settings.compress.minContextLimit = 50000;
                         rtk.excludeCommands = [ "cat" ];
                         mcp.memoryDir = "opencode-work";
+                        extraFiles."plugin-config.jsonc".value = {
+                          enabled = true;
+                          nested.option = "value";
+                        };
                       };
                     };
                     mcp = {
