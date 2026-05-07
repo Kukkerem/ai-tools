@@ -346,6 +346,40 @@ programs.ai-tools.mcp.filesystem.allowedPaths = [
 ];
 ```
 
+### Multiple OpenCode Profiles
+
+Top-level `programs.ai-tools.tools.opencode.*` options still configure the
+default OpenCode profile. Add `profiles` when you need additional isolated
+OpenCode configs and wrapper commands:
+
+```nix
+programs.ai-tools.tools.opencode = {
+  enable = true;
+
+  profiles.work = {
+    commandName = "ocw";
+    runCommandName = "ocw-run";
+
+    configDir = ".config/opencode-work";
+    dataDir = ".local/share/opencode-work";
+    stateDir = ".local/state/opencode-work";
+
+    theme = "nightowl";
+    plugins = [ "my-work-plugin@latest" ];
+    settings.experimental = true;
+
+    dcp.settings.compress.minContextLimit = 50000;
+    rtk.excludeCommands = [ "cat" ];
+
+    mcp.memoryDir = "opencode-work";
+  };
+};
+```
+
+Each generated wrapper exports `OPENCODE_CONFIG` and `OPENCODE_CONFIG_DIR` for
+its profile. `XDG_DATA_HOME` and `XDG_STATE_HOME` are exported when `dataDir` or
+`stateDir` are set.
+
 To wire NixOS options into OpenCode's `nixd` setup:
 
 ```nix
@@ -518,7 +552,7 @@ programs.ai-tools.mcp.servers.openrouterSearch = {
 - `profileName` is used to partition MCP memory files under `mcp.memoryBaseDir`.
 - Claude Code and OpenCode reuse the shared prompts, agents, and skills from `ai-tools/`.
 - Codex reuses Home Manager's Codex module for config and skills, with bundled prompts still placed under `.codex/prompts/`.
-- OpenCode writes optional DCP and RTK support files under `.config/opencode/` and `.config/rtk/` when enabled.
+- OpenCode writes optional DCP and RTK support files under each profile's config directory. The default profile also keeps the legacy `.config/rtk/config.toml` path for compatibility.
 
 ## Binary cache
 
