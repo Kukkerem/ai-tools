@@ -35,7 +35,7 @@
     mcp-nixos.url = "github:utensils/mcp-nixos";
 
     caveman = {
-      url = "github:JuliusBrussee/caveman/ef6050c5e1848b6880ff47c32ade1a608a64f85e";
+      url = "github:JuliusBrussee/caveman/754795ada42dea54adf061d42a61e560caa4f9ce";
       flake = false;
     };
 
