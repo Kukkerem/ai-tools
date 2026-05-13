@@ -37,6 +37,10 @@ let
       topP ? -1,
       topK ? -1,
       minP ? -1,
+      modelRoles ? { },
+      enabledModels ? [ ],
+      modelProviderOrder ? [ ],
+      disabledProviders ? [ ],
       retry ? { },
       edit ? { },
       read ? { },
@@ -83,6 +87,18 @@ let
         enabled = true;
         maxRetries = 3;
       };
+      defaultModelRoles = {
+        default = "claude-sonnet-4-6";
+        smol = "claude-haiku-4-5";
+      };
+      defaultEnabledModels = [
+        "anthropic/*"
+        "openai/*"
+      ];
+      defaultModelProviderOrder = [
+        "anthropic"
+        "openai"
+      ];
       defaultEdit = {
         mode = "hashline";
         fuzzyMatch = true;
@@ -130,6 +146,11 @@ let
         minP
         ;
       retry = recursiveUpdate defaultRetry retry;
+      modelRoles = recursiveUpdate defaultModelRoles modelRoles;
+      enabledModels = if enabledModels != [ ] then enabledModels else defaultEnabledModels;
+      modelProviderOrder =
+        if modelProviderOrder != [ ] then modelProviderOrder else defaultModelProviderOrder;
+      inherit disabledProviders;
       edit = recursiveUpdate defaultEdit edit;
       read = recursiveUpdate defaultRead read;
       lsp = recursiveUpdate defaultLsp lsp;
@@ -146,39 +167,11 @@ let
   mkOmpModels =
     {
       providers ? { },
-      modelRoles ? { },
-      enabledModels ? [ ],
-      disabledProviders ? [ ],
-      modelProviderOrder ? [ ],
       equivalence ? { },
     }:
-    let
-      defaultRoles = {
-        default = "claude-sonnet-4-6";
-        smol = "claude-haiku-4-5";
-      };
-      defaultOrder = [
-        "anthropic"
-        "openai"
-      ];
-      resolvedRoles = recursiveUpdate defaultRoles modelRoles;
-      resolvedEnabled =
-        if enabledModels != [ ] then
-          enabledModels
-        else
-          [
-            "anthropic/*"
-            "openai/*"
-          ];
-      resolvedOrder = if modelProviderOrder != [ ] then modelProviderOrder else defaultOrder;
-    in
     filterAttrs (_: v: v != { } && v != [ ]) {
       providers = if providers != { } then providers else { };
       equivalence = if equivalence != { } then equivalence else { };
-      modelRoles = resolvedRoles;
-      enabledModels = resolvedEnabled;
-      disabledProviders = disabledProviders;
-      modelProviderOrder = resolvedOrder;
     };
 
   mkOmpWrapper =
@@ -187,6 +180,7 @@ let
       commandName = if runMode then profile.runCommandName else profile.commandName;
       configDir = if profile.configDir != null then profile.configDir else ".omp";
       envVars = profile.env or { };
+      envFileVars = profile.envFiles or { };
       package = if profile ? package && profile.package != null then profile.package else llmAgents.omp;
     in
     pkgs.writeShellApplication {
@@ -199,6 +193,10 @@ let
         # shellcheck disable=SC2016
         export ${k}=${escapeShellArg envVars.${k}}
       '') (builtins.attrNames envVars)
+      + lib.concatMapStrings (k: ''
+        ${k}="$(< ${escapeShellArg envFileVars.${k}})"
+        export ${k}
+      '') (builtins.attrNames envFileVars)
       + ''
 
         exec ${lib.getExe package} "$@"

@@ -170,8 +170,41 @@ programs.ai-tools.tools.omp = {
 
   env = {
     ANTHROPIC_API_KEY = "...";
-    OPENAI_API_KEY = "...";
   };
+
+  # Runtime secret files are read by the wrapper without copying secrets into
+  # the Nix store. Literal `env` values stay shell-safe and are not evaluated.
+  envFiles = {
+    OLLAMA_CLOUD_API_KEY = "/run/secrets/ollama-cloud-api-key";
+    OPENROUTER_API_KEY = "/run/secrets/openrouter-api-key";
+    OPENCODE_API_KEY = "/run/secrets/opencode-api-key";
+  };
+
+  # OMP reads model routing from config.yml.
+  settings = {
+    modelRoles.default = "ollama-cloud/glm-5.1";
+    modelRoles.plan = "openai-codex/gpt-5.5";
+    enabledModels = [
+      "ollama-cloud/glm-5.1"
+      "openai-codex/gpt-5.5"
+      "openrouter/anthropic/claude-sonnet-4.5"
+    ];
+    modelProviderOrder = [
+      "ollama-cloud"
+      "opencode"
+      "openai-codex"
+      "openrouter"
+    ];
+    disabledProviders = [ ];
+    retry = {
+      enabled = true;
+      maxRetries = 3;
+    };
+  };
+
+  # models.yml is reserved for provider registry data and equivalence/custom
+  # model definitions.
+  modelSettings.providers = { };
 
   hooks = {
     permissionGate.enable = true;   # blocks rm -rf, sudo, chmod 777

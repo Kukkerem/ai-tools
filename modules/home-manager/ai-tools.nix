@@ -614,8 +614,21 @@ let
 
   invalidOmpEnvNames = lib.filter (name: !(validEnvName name)) (
     attrNames cfg.tools.omp.env
+    ++ attrNames cfg.tools.omp.envFiles
     ++ concatLists (map (profile: attrNames profile.env) (lib.attrValues cfg.tools.omp.profiles))
+    ++ concatLists (map (profile: attrNames profile.envFiles) (lib.attrValues cfg.tools.omp.profiles))
   );
+
+  ompConfigOnlyKeys = [
+    "modelRoles"
+    "modelProviderOrder"
+    "enabledModels"
+    "disabledProviders"
+  ];
+
+  ompModelsOnlySettings = attrs: lib.removeAttrs attrs ompConfigOnlyKeys;
+
+  mergeOmpAttrs = lib.foldl' recursiveUpdate { };
 
   defaultOpencodePackage =
     if defaultOpencodeProfile.commandName != null then
@@ -746,27 +759,25 @@ let
       bashInterceptor.enabled = cfg.tools.omp.bashInterceptor.enabled;
     };
 
-  mkOmpGeneratedModels = {
-    modelRoles = {
-      default = "claude-sonnet-4-6";
-    };
-    modelProviderOrder = [
-      "anthropic"
-      "openai"
-    ];
-  };
+  mkOmpGeneratedModels = { };
 
   mkOmpConfigYaml =
     profile:
-    lib.recursiveUpdate
-      (lib.recursiveUpdate (lib.recursiveUpdate (mkOmpGeneratedConfig profile) cfg.tools.omp.settings) cfg.tools.omp.extraSettings)
-      (profile.settings or { });
+    mergeOmpAttrs [
+      (mkOmpGeneratedConfig profile)
+      cfg.tools.omp.settings
+      cfg.tools.omp.extraSettings
+      (profile.settings or { })
+    ];
 
   mkOmpModelsYaml =
     profile:
-    lib.recursiveUpdate
-      (lib.recursiveUpdate (lib.recursiveUpdate mkOmpGeneratedModels cfg.tools.omp.modelSettings) cfg.tools.omp.extraModelSettings)
-      (profile.modelSettings or { });
+    mergeOmpAttrs [
+      mkOmpGeneratedModels
+      (ompModelsOnlySettings cfg.tools.omp.modelSettings)
+      (ompModelsOnlySettings cfg.tools.omp.extraModelSettings)
+      (ompModelsOnlySettings (profile.modelSettings or { }))
+    ];
 
   mkOmpMcpJson =
     profile:
@@ -806,6 +817,7 @@ let
     package = cfg.tools.omp.package;
     inherit (cfg.tools.omp)
       env
+      envFiles
       extraRuntimePackages
       ;
     theme = {
@@ -1732,6 +1744,18 @@ in
             Environment variables exported by the omp wrapper script.
             Use this for API keys and provider credentials
             (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+            Values are rendered literally; shell expressions are not evaluated.
+          '';
+        };
+
+        envFiles = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          description = ''
+            Environment variables loaded by the omp wrapper from runtime secret
+            files. Attribute names are variable names and values are literal file
+            paths, for example `OPENROUTER_API_KEY = "/run/secrets/openrouter"`.
+            Use this for secrets that must not be copied into the Nix store.
           '';
         };
 
@@ -1776,6 +1800,12 @@ in
                     type = types.attrsOf types.str;
                     default = { };
                     description = "Per-profile environment variables exported in the wrapper.";
+                  };
+
+                  envFiles = mkOption {
+                    type = types.attrsOf types.str;
+                    default = { };
+                    description = "Per-profile environment variables loaded by the wrapper from runtime secret files.";
                   };
 
                   extraRuntimePackages = mkOption {
@@ -2046,7 +2076,7 @@ in
 
         {
           assertion = invalidOmpEnvNames == [ ];
-          message = "programs.ai-tools.tools.omp.env and profiles.*.env keys must be valid shell environment variable names. Invalid names: ${lib.concatStringsSep ", " invalidOmpEnvNames}";
+          message = "programs.ai-tools.tools.omp env/envFiles and profiles.* env/envFiles keys must be valid shell environment variable names. Invalid names: ${lib.concatStringsSep ", " invalidOmpEnvNames}";
         }
 
       ];

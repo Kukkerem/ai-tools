@@ -48,15 +48,35 @@ let
             tools.omp = {
               enable = true;
               mcp.memoryDir = "custom-omp";
+              envFiles.OPENROUTER_API_KEY = "/run/secrets/openrouter-api-key";
+              settings = {
+                enabledModels = [
+                  "anthropic/*"
+                  "openai-codex/gpt-5.5"
+                ];
+                modelRoles.default = "openai-codex/gpt-5.5";
+                modelProviderOrder = [
+                  "ollama-cloud"
+                  "opencode"
+                  "openai-codex"
+                  "openrouter"
+                ];
+                disabledProviders = [ ];
+              };
+              modelSettings.providers.local.models = [ "local/test" ];
               profiles.work = {
                 commandName = "ompw";
                 configDir = ".omp-work";
                 env = {
                   ANTHROPIC_API_KEY = "test key with spaces";
                   SHELL_TEST = "value with \"quotes\" and $dollar";
+                  OPENCODE_API_KEY = "$(cat /run/secrets/opencode-api-key)";
                 };
-                settings.autoResume = true;
-                modelSettings.modelRoles.default = "openai/gpt-4o";
+                envFiles.OLLAMA_CLOUD_API_KEY = "/run/secrets/ollama-cloud-api-key";
+                settings = {
+                  autoResume = true;
+                  modelRoles.default = "ollama-cloud/glm-5.1";
+                };
                 hooks.permissionGate.enable = false;
                 mcp = {
                   memoryDir = "omp-work";
@@ -191,11 +211,19 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test "$(yq '.compaction.enabled' $omp_default_config)" = "true"
     test "$(yq '.compaction.reserveTokens' $omp_default_config)" = "16384"
     test "$(yq '.defaultThinkingLevel' $omp_default_config)" = "high"
-    test "$(yq '.modelRoles.default' $omp_default_models)" = "claude-sonnet-4-6"
-    test "$(yq '.modelProviderOrder[0]' $omp_default_models)" = "anthropic"
+    test "$(yq '.modelRoles.default' $omp_default_config)" = "openai-codex/gpt-5.5"
+    test "$(yq '.enabledModels[1]' $omp_default_config)" = "openai-codex/gpt-5.5"
+    test "$(yq '.modelProviderOrder[0]' $omp_default_config)" = "ollama-cloud"
+    test "$(yq '.disabledProviders | length' $omp_default_config)" = "0"
+    test "$(yq '.modelRoles == null' $omp_default_models)" = "true"
+    test "$(yq '.modelProviderOrder == null' $omp_default_models)" = "true"
+    test "$(yq '.enabledModels == null' $omp_default_models)" = "true"
+    test "$(yq '.providers.local.models[0]' $omp_default_models)" = "local/test"
     jq -e '.mcpServers.memory.env.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/custom-omp/memory.json"' "$omp_default_mcp" >/dev/null
 
     grep -F 'export PI_CONFIG_DIR="$HOME"/.omp' "$omp_wrapper" >/dev/null
+    grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null
+    grep -F 'export OPENROUTER_API_KEY' "$omp_wrapper" >/dev/null
 
     # ── omp work profile tests ──
 
@@ -210,12 +238,17 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -x "$omp_work_wrapper"
 
     test "$(yq '.autoResume' $omp_work_config)" = "true"
-    test "$(yq '.modelRoles.default' $omp_work_models)" = "openai/gpt-4o"
+    test "$(yq '.modelRoles.default' $omp_work_config)" = "ollama-cloud/glm-5.1"
+    test "$(yq '.modelRoles == null' $omp_work_models)" = "true"
 
     grep -F 'export PI_CONFIG_DIR="$HOME"/.omp-work' "$omp_work_wrapper" >/dev/null
     grep -F "export ANTHROPIC_API_KEY='test key with spaces'" "$omp_work_wrapper" >/dev/null
     grep -F 'export SHELL_TEST=' "$omp_work_wrapper" >/dev/null
     grep -F 'value with "quotes" and $dollar' "$omp_work_wrapper" >/dev/null
+    grep -F 'export OPENCODE_API_KEY=' "$omp_work_wrapper" >/dev/null
+    grep -F '$(cat /run/secrets/opencode-api-key)' "$omp_work_wrapper" >/dev/null
+    grep -F 'OLLAMA_CLOUD_API_KEY="$(< /run/secrets/ollama-cloud-api-key)"' "$omp_work_wrapper" >/dev/null
+    grep -F 'export OLLAMA_CLOUD_API_KEY' "$omp_work_wrapper" >/dev/null
 
     # permission gate disabled in work profile
     test ! -f "$omp_work_perm_gate"
