@@ -9,6 +9,10 @@ let
   cfg = config.programs.ai-tools;
 
   inherit (lib)
+    attrNames
+    concatLists
+    elem
+    filterAttrs
     mkEnableOption
     mkDefault
     mkIf
@@ -18,13 +22,17 @@ let
     optionals
     optionalAttrs
     optionalString
+    recursiveUpdate
     types
+    unique
     ;
 
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   aiTools = import ../../ai-tools { inherit inputs lib pkgs; };
   mcp = import ../../lib/mcp.nix { inherit inputs lib pkgs; };
   opencodeSupport = import ../../lib/opencode.nix { inherit inputs lib pkgs; };
+  ompSupport = import ../../lib/omp.nix { inherit inputs lib pkgs; };
+  ompMcpSupport = import ../../lib/omp-mcp.nix { inherit inputs lib pkgs; };
   packageSets = import ../../lib/packages.nix { inherit inputs lib pkgs; };
 
   mkServerOption = description: default: {
@@ -93,6 +101,81 @@ let
           "openrouter-search"
         ];
 
+  cavemanSkillNames = [
+    "caveman"
+    "caveman-commit"
+    "caveman-review"
+    "caveman-help"
+    "caveman-compress"
+    "caveman-stats"
+    "cavecrew"
+  ];
+
+  mattpocockSkillNames = [
+    "diagnose"
+    "grill-with-docs"
+    "triage"
+    "improve-codebase-architecture"
+    "setup-matt-pocock-skills"
+    "tdd"
+    "to-issues"
+    "to-prd"
+    "zoom-out"
+    "prototype"
+    "grill-me"
+    "handoff"
+    "write-a-skill"
+  ];
+
+  superpowersSkillNames = [
+    "brainstorming"
+    "dispatching-parallel-agents"
+    "executing-plans"
+    "finishing-a-development-branch"
+    "receiving-code-review"
+    "requesting-code-review"
+    "subagent-driven-development"
+    "systematic-debugging"
+    "test-driven-development"
+    "using-git-worktrees"
+    "using-superpowers"
+    "verification-before-completion"
+    "writing-plans"
+    "writing-skills"
+  ];
+
+  enabledSkillNames = unique (
+    (if cfg.skills.notebooklm.enable then [ "notebooklm" ] else [ ])
+    ++ (if cfg.skills.rtk.enable then [ "rtk" ] else [ ])
+    ++ (if cfg.skills.agentBrowser.enable then [ "agent-browser" ] else [ ])
+    ++ (if cfg.skills.basicMemory.enable then [ "basic-memory" ] else [ ])
+    ++ (if cfg.skills.dcp.enable then [ "dcp" ] else [ ])
+    ++ (if cfg.skills.karpathyGuidelines.enable then [ "karpathy-guidelines" ] else [ ])
+    ++ optionals cfg.skills.caveman.enable cavemanSkillNames
+    ++ optionals cfg.skills.mattpocock.enable mattpocockSkillNames
+    ++ optionals cfg.skills.superpowers.enable superpowersSkillNames
+  );
+
+  filterSkills = skills: filterAttrs (name: _: elem name enabledSkillNames) skills;
+
+  filterSkillFiles = skillFiles: filterAttrs (name: _: elem name enabledSkillNames) skillFiles;
+
+  mkSkillExtraHomeFiles =
+    baseDir: skillFiles:
+    lib.concatMapAttrs (
+      skillName: files:
+      lib.mapAttrs' (relPath: file: lib.nameValuePair "${baseDir}/${skillName}/${relPath}" file) files
+    ) (filterSkillFiles skillFiles);
+
+  mkSkillHomeFile =
+    skill:
+    if
+      builtins.typeOf skill == "path" || (builtins.typeOf skill == "string" && builtins.hasContext skill)
+    then
+      { source = "${skill}/SKILL.md"; }
+    else
+      { text = skill; };
+
   defaultProfileMcp = {
     serverOverrides = { };
     extraServers = { };
@@ -160,6 +243,7 @@ let
   '';
 
   jsonFormat = pkgs.formats.json { };
+  yamlFormat = pkgs.formats.yaml { };
 
   claudeCodeDefaultSettings = {
     theme = "dark";
@@ -272,14 +356,16 @@ let
 
   codexSettings = lib.recursiveUpdate (lib.recursiveUpdate codexDefaultSettings cfg.tools.codex.settings) cfg.tools.codex.extraSettings;
 
-  codexSkills = {
-    agent-browser = aiTools.codex.skills.agent-browser;
-  };
+  codexSkills = filterSkills aiTools.codex.skills;
 
   codexHomeFiles =
     lib.mapAttrs' (
       name: prompt: lib.nameValuePair ".codex/prompts/${name}.md" { text = prompt; }
     ) aiTools.codex.prompts
+    // lib.mapAttrs' (
+      skillName: skill: lib.nameValuePair ".agents/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
+    ) (filterSkills aiTools.codex.skills)
+    // mkSkillExtraHomeFiles ".agents/skills" aiTools.codex.skillFiles
     // lib.mapAttrs' (
       name: skill: lib.nameValuePair ".agents/skills/${name}/SKILL.md" { text = skill.skillMd; }
     ) aiTools.codex.agentSkills
@@ -404,8 +490,9 @@ let
       ) aiTools.claudeCode.commands
       // lib.mapAttrs' (
         skillName: skill:
-        lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" { text = skill; }
-      ) aiTools.claudeCode.skills;
+        lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
+      ) (filterSkills aiTools.claudeCode.skills)
+      // mkSkillExtraHomeFiles "${profile.configDir}/skills" aiTools.claudeCode.skillFiles;
       dcpConfig = optionalAttrs profile.dcp.enable {
         "${profile.configDir}/dcp.jsonc".source = jsonFormat.generate "opencode-${name}-dcp" (
           mkOpencodeDcpSettings profile
@@ -507,6 +594,10 @@ let
       defaultOpencodeEnabled && defaultOpencodeProfile.configDir != ".config/opencode"
     ) (mkOpencodeProfileFiles "default" defaultOpencodeProfile);
 
+  defaultOpencodeSkillExtraFiles = optionalAttrs defaultOpencodeEnabled (
+    mkSkillExtraHomeFiles "${defaultOpencodeProfile.configDir}/skills" aiTools.claudeCode.skillFiles
+  );
+
   extraOpencodePackages =
     lib.mapAttrsToList (_: profile: mkOpencodeWrapper profile false) (
       lib.filterAttrs (_: profile: profile.commandName != null) extraOpencodeProfiles
@@ -516,6 +607,15 @@ let
     );
 
   opencodeRtkEnabled = lib.any (profile: profile.rtk.enable) (lib.attrValues enabledOpencodeProfiles);
+
+  opencodeDcpEnabled = lib.any (profile: profile.dcp.enable) (lib.attrValues enabledOpencodeProfiles);
+
+  validEnvName = name: builtins.match "[A-Za-z_][A-Za-z0-9_]*" name != null;
+
+  invalidOmpEnvNames = lib.filter (name: !(validEnvName name)) (
+    attrNames cfg.tools.omp.env
+    ++ concatLists (map (profile: attrNames profile.env) (lib.attrValues cfg.tools.omp.profiles))
+  );
 
   defaultOpencodePackage =
     if defaultOpencodeProfile.commandName != null then
@@ -536,7 +636,288 @@ let
   gitIgnores =
     optional cfg.tools.claudeCode.enable ".claude/"
     ++ optional cfg.tools.codex.enable ".codex/"
-    ++ optional cfg.tools.opencode.enable ".opencode/";
+    ++ optional cfg.tools.opencode.enable ".opencode/"
+    ++ optional cfg.tools.omp.enable ".omp/";
+
+  # ── omp config generation ──
+
+  mkOmpMcpEnabledServerNames =
+    profileMcp:
+    optionals
+      (mkMcpServerEnable cfg.mcp.servers.sequentialThinking profileMcp.servers.sequentialThinking)
+      [
+        "sequential-thinking"
+      ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.git profileMcp.servers.git) [ "git" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.context7 profileMcp.servers.context7) [ "context7" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.nixos profileMcp.servers.nixos) [ "nixos" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.time profileMcp.servers.time) [ "time" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.fetch profileMcp.servers.fetch) [ "fetch" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.memory profileMcp.servers.memory) [ "memory" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.serena profileMcp.servers.serena) [ "serena" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.playwright profileMcp.servers.playwright) [
+      "playwright"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.filesystem profileMcp.servers.filesystem) [
+      "filesystem"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.notebooklm profileMcp.servers.notebooklm) [
+      "notebooklm"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.basicMemory profileMcp.servers.basicMemory) [
+      "basic-memory"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.terraform profileMcp.servers.terraform) [
+      "terraform"
+    ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.qmd profileMcp.servers.qmd) [ "qmd" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.deepwiki profileMcp.servers.deepwiki) [ "deepwiki" ]
+    ++ optionals (mkMcpServerEnable cfg.mcp.servers.exa profileMcp.servers.exa) [ "exa" ]
+    ++
+      optionals (mkMcpServerEnable cfg.mcp.servers.openrouterSearch profileMcp.servers.openrouterSearch)
+        [
+          "openrouter-search"
+        ];
+
+  mkOmpMcpConfig =
+    profileMcp:
+    let
+      profileOpenrouter = profileMcp.servers.openrouterSearch;
+      hasProfileOpenrouterSecret =
+        profileOpenrouter.apiKey != null || profileOpenrouter.apiKeyFile != null;
+    in
+    {
+      enabledServerNames = mkOmpMcpEnabledServerNames profileMcp;
+      filesystemAllowedPaths = cfg.mcp.filesystem.allowedPaths;
+      memoryBaseDir = cfg.mcp.memoryBaseDir;
+      memoryDir = profileMcp.memoryDir;
+      qmdUrl =
+        if profileMcp.servers.qmd.url != null then profileMcp.servers.qmd.url else cfg.mcp.servers.qmd.url;
+      openrouterSearchApiKey =
+        if hasProfileOpenrouterSecret then
+          profileOpenrouter.apiKey
+        else
+          cfg.mcp.servers.openrouterSearch.apiKey;
+      openrouterSearchApiKeyFile =
+        if hasProfileOpenrouterSecret then
+          profileOpenrouter.apiKeyFile
+        else
+          cfg.mcp.servers.openrouterSearch.apiKeyFile;
+      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env // profileOpenrouter.env;
+      serverOverrides = cfg.mcp.serverOverrides // profileMcp.serverOverrides;
+      extraServers = cfg.mcp.extraServers // profileMcp.extraServers;
+    };
+
+  mkOmpGeneratedConfig =
+    profile:
+    let
+      theme = {
+        dark = if profile.theme.dark != null then profile.theme.dark else cfg.tools.omp.theme.dark;
+        light = if profile.theme.light != null then profile.theme.light else cfg.tools.omp.theme.light;
+      };
+    in
+    ompSupport.mkOmpConfig {
+      inherit theme;
+      symbolPreset = cfg.tools.omp.symbolPreset;
+      defaultThinkingLevel = cfg.tools.omp.defaultThinkingLevel;
+      hideThinkingBlock = cfg.tools.omp.hideThinkingBlock;
+      terminal.showImages = cfg.tools.omp.terminal.showImages;
+      display.tabWidth = cfg.tools.omp.display.tabWidth;
+      steeringMode = cfg.tools.omp.steeringMode;
+      followUpMode = cfg.tools.omp.followUpMode;
+      interruptMode = cfg.tools.omp.interruptMode;
+      compaction = {
+        enabled = cfg.tools.omp.compaction.enabled;
+        reserveTokens = cfg.tools.omp.compaction.reserveTokens;
+        keepRecentTokens = cfg.tools.omp.compaction.keepRecentTokens;
+        autoContinue = cfg.tools.omp.compaction.autoContinue;
+        strategy = cfg.tools.omp.compaction.strategy;
+      };
+      skills.enabled = cfg.tools.omp.skills.enabled;
+      memories.enabled = cfg.tools.omp.memories.enabled;
+      temperature = cfg.tools.omp.temperature;
+      topP = cfg.tools.omp.topP;
+      read.lineNumbers = cfg.tools.omp.readLineNumbers;
+      edit.mode = cfg.tools.omp.edit.mode;
+      lsp = {
+        enabled = cfg.tools.omp.lsp.enabled;
+        formatOnWrite = cfg.tools.omp.lsp.formatOnWrite;
+      };
+      bashInterceptor.enabled = cfg.tools.omp.bashInterceptor.enabled;
+    };
+
+  mkOmpGeneratedModels = {
+    modelRoles = {
+      default = "claude-sonnet-4-6";
+    };
+    modelProviderOrder = [
+      "anthropic"
+      "openai"
+    ];
+  };
+
+  mkOmpConfigYaml =
+    profile:
+    lib.recursiveUpdate
+      (lib.recursiveUpdate (lib.recursiveUpdate (mkOmpGeneratedConfig profile) cfg.tools.omp.settings) cfg.tools.omp.extraSettings)
+      (profile.settings or { });
+
+  mkOmpModelsYaml =
+    profile:
+    lib.recursiveUpdate
+      (lib.recursiveUpdate (lib.recursiveUpdate mkOmpGeneratedModels cfg.tools.omp.modelSettings) cfg.tools.omp.extraModelSettings)
+      (profile.modelSettings or { });
+
+  mkOmpMcpJson =
+    profile:
+    let
+      mcpProfile = profile.mcp;
+    in
+    let
+      mcpEnable = if mcpProfile.enable != null then mcpProfile.enable else cfg.tools.omp.mcp.enable;
+    in
+    if mcpEnable then
+      ompMcpSupport.forOmp (
+        let
+          p = mkOmpMcpConfig mcpProfile;
+        in
+        {
+          inherit (p)
+            enabledServerNames
+            filesystemAllowedPaths
+            memoryBaseDir
+            qmdUrl
+            openrouterSearchApiKey
+            openrouterSearchApiKeyFile
+            openrouterSearchEnv
+            serverOverrides
+            extraServers
+            ;
+          memoryDir = if mcpProfile.memoryDir != null then mcpProfile.memoryDir else "${cfg.profileName}-omp";
+        }
+      )
+    else
+      null;
+
+  legacyOmpProfile = {
+    enable = cfg.tools.omp.enable;
+    commandName = "omp";
+    configDir = ".omp";
+    package = cfg.tools.omp.package;
+    inherit (cfg.tools.omp)
+      env
+      extraRuntimePackages
+      ;
+    theme = {
+      dark = cfg.tools.omp.theme.dark;
+      light = cfg.tools.omp.theme.light;
+    };
+    hooks = {
+      permissionGate.enable = cfg.tools.omp.hooks.permissionGate.enable;
+      protectedPaths.enable = cfg.tools.omp.hooks.protectedPaths.enable;
+    };
+    mcp = {
+      enable = cfg.tools.omp.mcp.enable;
+      memoryDir =
+        if cfg.tools.omp.mcp.memoryDir != null then
+          cfg.tools.omp.mcp.memoryDir
+        else
+          "${cfg.profileName}-omp";
+      serverOverrides = cfg.tools.omp.mcp.serverOverrides;
+      extraServers = cfg.tools.omp.mcp.extraServers;
+      servers =
+        lib.recursiveUpdate (lib.mapAttrs (_: _: { enable = null; }) cfg.mcp.servers) {
+          qmd.url = null;
+          openrouterSearch = {
+            apiKey = null;
+            apiKeyFile = null;
+            env = { };
+          };
+        }
+        // cfg.tools.omp.mcp.servers;
+    };
+  };
+
+  ompProfiles = lib.mapAttrs (
+    _name: profile:
+    let
+      baseProfile = recursiveUpdate legacyOmpProfile profile;
+      hooksProfile = lib.filterAttrs (_: hook: hook.enable != null) (profile.hooks or { });
+      hooksEnable = recursiveUpdate legacyOmpProfile.hooks hooksProfile;
+      profileMcp = recursiveUpdate {
+        serverOverrides = { };
+        extraServers = { };
+        servers = legacyOmpProfile.mcp.servers;
+      } (baseProfile.mcp or { });
+    in
+    baseProfile
+    // {
+      commandName =
+        if baseProfile.commandName != null then baseProfile.commandName else legacyOmpProfile.commandName;
+      package = if baseProfile.package != null then baseProfile.package else legacyOmpProfile.package;
+      configDir =
+        if baseProfile.configDir != null then baseProfile.configDir else legacyOmpProfile.configDir;
+      hooks = hooksEnable;
+      mcp = profileMcp;
+    }
+  ) ({ default = { }; } // cfg.tools.omp.profiles);
+
+  enabledOmpProfiles = lib.filterAttrs (_name: profile: profile.enable) ompProfiles;
+  defaultOmpProfile = ompProfiles.default;
+  defaultOmpEnabled = defaultOmpProfile.enable;
+
+  extraOmpProfiles = lib.filterAttrs (name: _: name != "default") enabledOmpProfiles;
+
+  # Each profile gets a .omp/<profile> config dir under home
+  mkOmpProfileFiles =
+    name: profile:
+    let
+      dir = profile.configDir;
+      configYaml = mkOmpConfigYaml profile;
+      modelsYaml = mkOmpModelsYaml profile;
+      configContent = yamlFormat.generate "omp-${name}-config" configYaml;
+      modelsContent = yamlFormat.generate "omp-${name}-models" modelsYaml;
+      mcpJson = mkOmpMcpJson profile;
+
+      hookFiles =
+        lib.optionalAttrs (profile.hooks.permissionGate.enable or false) {
+          "agent/extensions/permission-gate.ts" = {
+            text = ompSupport.hooks.permissionGate;
+          };
+        }
+        // lib.optionalAttrs (profile.hooks.protectedPaths.enable or false) {
+          "agent/extensions/protected-paths.ts" = {
+            text = ompSupport.hooks.protectedPaths;
+          };
+        };
+    in
+    {
+      "${dir}/agent/config.yml".source = configContent;
+      "${dir}/agent/models.yml".source = modelsContent;
+    }
+    // lib.optionalAttrs (mcpJson != null) {
+      "${dir}/agent/mcp.json".source = mcpJson;
+    }
+    // lib.mapAttrs' (relPath: file: lib.nameValuePair "${dir}/${relPath}" file) hookFiles
+    // lib.mapAttrs' (
+      agentName: agent: lib.nameValuePair "${dir}/agent/agents/${agentName}.md" { text = agent; }
+    ) aiTools.omp.agents
+    // lib.mapAttrs' (
+      commandName: command:
+      lib.nameValuePair "${dir}/agent/commands/${commandName}.md" { text = command; }
+    ) aiTools.omp.commands
+    // lib.mapAttrs' (
+      skillName: skill:
+      lib.nameValuePair "${dir}/agent/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
+    ) (filterSkills aiTools.omp.skills)
+    // mkSkillExtraHomeFiles "${dir}/agent/skills" aiTools.omp.skillFiles;
+
+  # Wrappers for each profile with a commandName
+  mkOmpProfileWrapper = name: profile: ompSupport.mkOmpWrapper profile false;
+
+  ompWrapperPackages = lib.mapAttrsToList (_name: profile: mkOmpProfileWrapper _name profile) (
+    lib.filterAttrs (_name: profile: profile.commandName != null) enabledOmpProfiles
+  );
 in
 {
   options.programs.ai-tools = {
@@ -1059,6 +1440,466 @@ in
           '';
         };
       };
+
+      omp = {
+        enable = mkEnableOption "omp (oh-my-pi) coding agent" // {
+          default = false;
+        };
+
+        package = mkOption {
+          type = types.package;
+          default = llmAgents.omp;
+          defaultText = "pkgs.llm-agents.omp";
+          description = "omp package to use.";
+        };
+
+        settings = mkOption {
+          type = types.attrsOf types.anything;
+          default = { };
+          description = "Additional omp config.yml settings merged into module defaults.";
+        };
+
+        extraSettings = mkOption {
+          type = types.attrsOf types.anything;
+          default = { };
+          description = "Final config.yml override merged after `settings`.";
+        };
+
+        modelSettings = mkOption {
+          type = types.attrsOf types.anything;
+          default = { };
+          description = "Additional models.yml settings merged into module defaults.";
+        };
+
+        extraModelSettings = mkOption {
+          type = types.attrsOf types.anything;
+          default = { };
+          description = "Final models.yml override merged after `modelSettings`.";
+        };
+
+        theme = {
+          dark = mkOption {
+            type = types.str;
+            default = "titanium";
+            description = "omp dark theme name.";
+          };
+          light = mkOption {
+            type = types.str;
+            default = "light";
+            description = "omp light theme name.";
+          };
+        };
+
+        symbolPreset = mkOption {
+          type = types.enum [
+            "unicode"
+            "nerd"
+            "ascii"
+          ];
+          default = "unicode";
+          description = "omp symbol/icon preset.";
+        };
+
+        defaultThinkingLevel = mkOption {
+          type = types.enum [
+            "low"
+            "medium"
+            "high"
+          ];
+          default = "high";
+          description = "Default thinking level for omp.";
+        };
+
+        hideThinkingBlock = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Whether to collapse thinking blocks by default.";
+        };
+
+        terminal.showImages = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Show images inline in the terminal.";
+        };
+
+        display.tabWidth = mkOption {
+          type = types.int;
+          default = 3;
+          description = "Tab width in the omp display.";
+        };
+
+        steeringMode = mkOption {
+          type = types.enum [
+            "one-at-a-time"
+            "all-at-once"
+          ];
+          default = "one-at-a-time";
+          description = "How omp handles concurrent tool calls.";
+        };
+
+        followUpMode = mkOption {
+          type = types.enum [
+            "one-at-a-time"
+            "all-at-once"
+          ];
+          default = "one-at-a-time";
+          description = "How omp handles follow-up suggestions.";
+        };
+
+        interruptMode = mkOption {
+          type = types.enum [
+            "immediate"
+            "delayed"
+          ];
+          default = "immediate";
+          description = "How omp handles user interrupts.";
+        };
+
+        compaction = {
+          enabled = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Enable automatic message compaction.";
+          };
+          reserveTokens = mkOption {
+            type = types.int;
+            default = 16384;
+            description = "Tokens to reserve during compaction.";
+          };
+          keepRecentTokens = mkOption {
+            type = types.int;
+            default = 20000;
+            description = "Tokens to keep from recent conversation.";
+          };
+          autoContinue = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Auto-continue after compaction.";
+          };
+          strategy = mkOption {
+            type = types.enum [
+              "context-full"
+              "handoff"
+              "off"
+            ];
+            default = "context-full";
+            description = "Compaction strategy.";
+          };
+        };
+
+        skills.enabled = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Enable omp skill loading.";
+        };
+
+        memories.enabled = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Enable omp memory persistence.";
+        };
+
+        temperature = mkOption {
+          type = types.float;
+          default = -1.0;
+          description = "Model temperature (-1 = provider default).";
+        };
+
+        topP = mkOption {
+          type = types.float;
+          default = -1.0;
+          description = "Top-p sampling (-1 = provider default).";
+        };
+
+        readLineNumbers = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Show line numbers in file reads.";
+        };
+
+        edit.mode = mkOption {
+          type = types.enum [
+            "hashline"
+            "search-replace"
+            "diff"
+          ];
+          default = "hashline";
+          description = "File editing mode.";
+        };
+
+        lsp = {
+          enabled = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Enable LSP integration.";
+          };
+          formatOnWrite = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Run formatter on file writes via LSP.";
+          };
+        };
+
+        bashInterceptor.enabled = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Enable the bash command interceptor.";
+        };
+
+        hooks = {
+          permissionGate.enable =
+            mkEnableOption "permission gate hook (blocks rm -rf, sudo, chmod 777, etc.)"
+            // {
+              default = true;
+            };
+          protectedPaths.enable =
+            mkEnableOption "protected paths hook (blocks writes to .env, .git/, node_modules/, etc.)"
+            // {
+              default = true;
+            };
+        };
+
+        mcp = {
+          enable = mkEnableOption "MCP server support for omp" // {
+            default = true;
+          };
+
+          memoryDir = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "MCP memory directory name for omp.";
+          };
+
+          serverOverrides = mkOption {
+            type = types.attrsOf types.anything;
+            default = { };
+            description = "MCP server definition overrides for omp.";
+          };
+
+          extraServers = mkOption {
+            type = types.attrsOf types.anything;
+            default = { };
+            description = "Additional MCP server definitions for omp.";
+          };
+
+          servers = {
+            sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server for omp";
+            git = mkProfileServerOption "the git MCP server for omp";
+            context7 = mkProfileServerOption "the Context7 MCP server for omp";
+            nixos = mkProfileServerOption "the nixos MCP server for omp";
+            time = mkProfileServerOption "the time MCP server for omp";
+            fetch = mkProfileServerOption "the fetch MCP server for omp";
+            memory = mkProfileServerOption "the memory MCP server for omp";
+            serena = mkProfileServerOption "the serena MCP server for omp";
+            playwright = mkProfileServerOption "the playwright MCP server for omp";
+            filesystem = mkProfileServerOption "the filesystem MCP server for omp";
+            notebooklm = mkProfileServerOption "the NotebookLM MCP server for omp";
+            basicMemory = mkProfileServerOption "the Basic Memory MCP server for omp";
+            terraform = mkProfileServerOption "the Terraform MCP server for omp";
+            qmd = mkProfileServerOption "the QMD MCP server for omp" // {
+              url = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Optional per-profile QMD MCP URL override for omp.";
+              };
+            };
+            deepwiki = mkProfileServerOption "the DeepWiki MCP server for omp";
+            exa = mkProfileServerOption "the Exa MCP server for omp";
+            openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server for omp" // {
+              apiKey = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Optional literal OpenRouter API key for omp.";
+              };
+              apiKeyFile = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Optional file containing the OpenRouter API key for omp.";
+              };
+              env = mkOption {
+                type = types.attrsOf types.str;
+                default = { };
+                description = "Additional environment for the OpenRouter Search MCP server for omp.";
+              };
+            };
+          };
+        };
+
+        env = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          description = ''
+            Environment variables exported by the omp wrapper script.
+            Use this for API keys and provider credentials
+            (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+          '';
+        };
+
+        extraRuntimePackages = mkOption {
+          type = types.listOf types.package;
+          default = [ ];
+          description = "Extra packages added to the omp wrapper runtime PATH.";
+        };
+
+        profiles = mkOption {
+          type = types.attrsOf (
+            types.submodule (
+              { name, ... }:
+              {
+                options = {
+                  enable = mkEnableOption "omp profile `${name}`" // {
+                    default = true;
+                  };
+
+                  commandName = mkOption {
+                    type = types.nullOr types.str;
+                    default = null;
+                    description = "Wrapper command name for this profile.";
+                  };
+
+                  configDir = mkOption {
+                    type = types.nullOr types.str;
+                    default = null;
+                    description = ''
+                      Home-relative omp config directory. Defaults to `.omp`
+                      for default, `.omp-<name>` for other profiles.
+                    '';
+                  };
+
+                  package = mkOption {
+                    type = types.nullOr types.package;
+                    default = null;
+                    description = "Optional omp package override for this profile.";
+                  };
+
+                  env = mkOption {
+                    type = types.attrsOf types.str;
+                    default = { };
+                    description = "Per-profile environment variables exported in the wrapper.";
+                  };
+
+                  extraRuntimePackages = mkOption {
+                    type = types.listOf types.package;
+                    default = [ ];
+                    description = "Extra packages for this profile wrapper PATH.";
+                  };
+
+                  settings = mkOption {
+                    type = types.attrsOf types.anything;
+                    default = { };
+                    description = "Per-profile config.yml overrides.";
+                  };
+
+                  modelSettings = mkOption {
+                    type = types.attrsOf types.anything;
+                    default = { };
+                    description = "Per-profile models.yml overrides.";
+                  };
+
+                  theme = {
+                    dark = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      description = "Per-profile dark theme override.";
+                    };
+                    light = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      description = "Per-profile light theme override.";
+                    };
+                  };
+
+                  hooks = {
+                    permissionGate.enable = mkOption {
+                      type = types.nullOr types.bool;
+                      default = null;
+                      description = "Per-profile permission gate hook override.";
+                    };
+                    protectedPaths.enable = mkOption {
+                      type = types.nullOr types.bool;
+                      default = null;
+                      description = "Per-profile protected paths hook override.";
+                    };
+                  };
+
+                  mcp = {
+                    enable = mkOption {
+                      type = types.nullOr types.bool;
+                      default = null;
+                      description = "Per-profile MCP enable override.";
+                    };
+
+                    memoryDir = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      description = "Per-profile MCP memory directory.";
+                    };
+
+                    serverOverrides = mkOption {
+                      type = types.attrsOf types.anything;
+                      default = { };
+                      description = "Per-profile MCP server overrides.";
+                    };
+
+                    extraServers = mkOption {
+                      type = types.attrsOf types.anything;
+                      default = { };
+                      description = "Per-profile extra MCP servers.";
+                    };
+
+                    servers = {
+                      sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server";
+                      git = mkProfileServerOption "the git MCP server";
+                      context7 = mkProfileServerOption "the Context7 MCP server";
+                      nixos = mkProfileServerOption "the nixos MCP server";
+                      time = mkProfileServerOption "the time MCP server";
+                      fetch = mkProfileServerOption "the fetch MCP server";
+                      memory = mkProfileServerOption "the memory MCP server";
+                      serena = mkProfileServerOption "the serena MCP server";
+                      playwright = mkProfileServerOption "the playwright MCP server";
+                      filesystem = mkProfileServerOption "the filesystem MCP server";
+                      notebooklm = mkProfileServerOption "the NotebookLM MCP server";
+                      basicMemory = mkProfileServerOption "the Basic Memory MCP server";
+                      terraform = mkProfileServerOption "the Terraform MCP server";
+                      qmd = mkProfileServerOption "the QMD MCP server" // {
+                        url = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile QMD MCP URL override.";
+                        };
+                      };
+                      deepwiki = mkProfileServerOption "the DeepWiki MCP server";
+                      exa = mkProfileServerOption "the Exa MCP server";
+                      openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server" // {
+                        apiKey = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile literal OpenRouter API key override.";
+                        };
+                        apiKeyFile = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = "Optional per-profile file containing the OpenRouter API key.";
+                        };
+                        env = mkOption {
+                          type = types.attrsOf types.str;
+                          default = { };
+                          description = "Additional per-profile environment for the OpenRouter Search MCP server.";
+                        };
+                      };
+                    };
+                  };
+                };
+              }
+            )
+          );
+          default = { };
+          description = ''
+            Additional omp profiles. The default profile is always generated
+            from the top-level `tools.omp.*` settings.
+          '';
+        };
+      };
     };
 
     mcp = {
@@ -1087,16 +1928,16 @@ in
       };
 
       servers = {
-        sequentialThinking = mkServerOption "the sequential-thinking MCP server" true;
-        git = mkServerOption "the git MCP server" true;
+        sequentialThinking = mkServerOption "the sequential-thinking MCP server" false;
+        git = mkServerOption "the git MCP server" false;
         context7 = mkServerOption "the Context7 MCP server" false;
         nixos = mkServerOption "the nixos MCP server" false;
-        time = mkServerOption "the time MCP server" true;
+        time = mkServerOption "the time MCP server" false;
         fetch = mkServerOption "the fetch MCP server" false;
-        memory = mkServerOption "the memory MCP server" true;
-        serena = mkServerOption "the serena MCP server" true;
+        memory = mkServerOption "the memory MCP server" false;
+        serena = mkServerOption "the serena MCP server" false;
         playwright = mkServerOption "the playwright MCP server" false;
-        filesystem = mkServerOption "the filesystem MCP server" true;
+        filesystem = mkServerOption "the filesystem MCP server" false;
         notebooklm = mkServerOption "the NotebookLM MCP server" false;
         basicMemory = mkServerOption "the Basic Memory MCP server" false;
         terraform = mkServerOption "the Terraform MCP server" false;
@@ -1140,6 +1981,56 @@ in
         };
       };
     };
+
+    skills = {
+      caveman.enable =
+        mkEnableOption "caveman skills (caveman, caveman-commit, caveman-review, etc.)"
+        // {
+          default = true;
+        };
+
+      mattpocock.enable = mkEnableOption "Matt Pocock engineering and productivity skills" // {
+        default = true;
+      };
+
+      superpowers.enable =
+        mkEnableOption "superpowers skills (brainstorming, writing-plans, TDD, etc.)"
+        // {
+          default = true;
+        };
+
+      dcp.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "DCP (Dynamic Context Pruning) skill. Auto-enabled when any opencode profile has DCP enabled.";
+      };
+
+      karpathyGuidelines.enable = mkEnableOption "Karpathy behavioral guidelines skill" // {
+        default = true;
+      };
+
+      agentBrowser.enable = mkEnableOption "agent-browser skill" // {
+        default = true;
+      };
+
+      basicMemory.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Basic Memory skill. Auto-enabled when the basicMemory MCP server is enabled.";
+      };
+
+      notebooklm.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "NotebookLM skill. Auto-enabled when the notebooklm MCP server is enabled.";
+      };
+
+      rtk.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "RTK (Reduce Token Karma) skill. Auto-enabled when any opencode profile has RTK enabled.";
+      };
+    };
   };
 
   config = mkIf cfg.enable (mkMerge [
@@ -1153,8 +2044,25 @@ in
           message = "programs.ai-tools.mcp.servers.qmd.enable requires qmd.url, mcp.serverOverrides.qmd.url, or a full local mcp.serverOverrides.qmd.command replacement.";
         }
 
+        {
+          assertion = invalidOmpEnvNames == [ ];
+          message = "programs.ai-tools.tools.omp.env and profiles.*.env keys must be valid shell environment variable names. Invalid names: ${lib.concatStringsSep ", " invalidOmpEnvNames}";
+        }
+
       ];
     }
+
+    (mkIf cfg.skills.agentBrowser.enable {
+      home.packages = packageSets.agentBrowserSkillRuntimePackages;
+    })
+
+    (mkIf cfg.skills.caveman.enable {
+      home.packages = packageSets.cavemanSkillRuntimePackages;
+    })
+
+    (mkIf cfg.skills.superpowers.enable {
+      home.packages = packageSets.superpowersSkillRuntimePackages;
+    })
 
     (mkIf cfg.mcp.servers.serena.enable {
       # Only core language servers (gopls, nixd) are added automatically.
@@ -1165,6 +2073,7 @@ in
 
     (mkIf cfg.tools.claudeCode.enable {
       home.packages = packageSets.claudeCodeHelperPackages;
+      home.file = mkSkillExtraHomeFiles ".claude/skills" aiTools.claudeCode.skillFiles;
 
       programs.claude-code = mkMerge [
         {
@@ -1172,12 +2081,10 @@ in
           package = mkDefault llmAgents.claude-code;
           mcpServers = mkDefault (mkToolMcpServers "claudecode" mcp.forClaudeCode);
           settings = mkDefault claudeCodeSettings;
-          inherit (aiTools.claudeCode)
-            agents
-            commands
-            skills
-            ;
-          memory.text = mkDefault instructions;
+          agents = aiTools.claudeCode.agents;
+          commands = aiTools.claudeCode.commands;
+          skills = filterSkills aiTools.claudeCode.skills;
+          context = mkDefault instructions;
         }
         cfg.tools.claudeCode.program
       ];
@@ -1193,7 +2100,7 @@ in
           enable = true;
           package = mkDefault llmAgents.codex;
           settings = mkDefault codexSettings;
-          "custom-instructions" = mkDefault instructions;
+          context = mkDefault instructions;
           skills = codexSkills;
         }
         cfg.tools.codex.program
@@ -1202,7 +2109,7 @@ in
 
     (mkIf cfg.tools.opencode.enable {
       home.packages = packageSets.opencodeHelperPackages ++ extraOpencodePackages;
-      home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles;
+      home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles // defaultOpencodeSkillExtraFiles;
     })
 
     (mkIf (cfg.tools.opencode.enable && defaultOpencodeEnabled) {
@@ -1211,13 +2118,13 @@ in
         {
           enable = true;
           package = mkDefault defaultOpencodePackage;
-          rules = mkDefault opencodeRules;
+          context = mkDefault opencodeRules;
           settings = mkDefault opencodeSettings;
           inherit (aiTools.claudeCode)
             agents
             commands
-            skills
             ;
+          skills = filterSkills aiTools.claudeCode.skills;
         }
         cfg.tools.opencode.program
       ];
@@ -1259,5 +2166,29 @@ in
         };
       }
     )
+
+    (mkIf cfg.tools.omp.enable {
+      home.packages = ompWrapperPackages;
+      home.file = lib.foldlAttrs (
+        files: name: profile:
+        files // mkOmpProfileFiles name profile
+      ) { } enabledOmpProfiles;
+    })
+
+    (mkIf cfg.mcp.servers.notebooklm.enable {
+      programs.ai-tools.skills.notebooklm.enable = mkDefault true;
+    })
+
+    (mkIf cfg.mcp.servers.basicMemory.enable {
+      programs.ai-tools.skills.basicMemory.enable = mkDefault true;
+    })
+
+    (mkIf (cfg.tools.opencode.enable && opencodeRtkEnabled) {
+      programs.ai-tools.skills.rtk.enable = mkDefault true;
+    })
+
+    (mkIf (cfg.tools.opencode.enable && opencodeDcpEnabled) {
+      programs.ai-tools.skills.dcp.enable = mkDefault true;
+    })
   ]);
 }

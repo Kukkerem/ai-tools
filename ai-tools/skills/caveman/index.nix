@@ -8,5 +8,7 @@ in
   caveman-commit = "${src}/skills/caveman-commit";
   caveman-review = "${src}/skills/caveman-review";
   caveman-help = "${src}/skills/caveman-help";
-  caveman-compress = "${src}/caveman-compress";
+  caveman-compress = "${src}/skills/caveman-compress";
+  caveman-stats = "${src}/skills/caveman-stats";
+  cavecrew = "${src}/skills/cavecrew";
 }

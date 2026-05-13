@@ -217,6 +217,23 @@
         "type": "github"
       }
     },
+    "mattpocock-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778571379,
+        "narHash": "sha256-jdUTec3217Bc+h5npjKOlIBHp3rhEd/sRKzDV2N7XIc=",
+        "owner": "mattpocock",
+        "repo": "skills",
+        "rev": "f304057d61d3df3c9fd992ac2b6e3833cb9325fb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mattpocock",
+        "repo": "skills",
+        "rev": "f304057d61d3df3c9fd992ac2b6e3833cb9325fb",
+        "type": "github"
+      }
+    },
     "mcp-nixos": {
       "inputs": {
         "devshell": "devshell_2",
@@ -362,10 +379,29 @@
         "devshell": "devshell",
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
+        "mattpocock-skills": "mattpocock-skills",
         "mcp-nixos": "mcp-nixos",
         "mcp-openrouter-search": "mcp-openrouter-search",
         "mcp-servers-nix": "mcp-servers-nix",
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_4",
+        "superpowers": "superpowers"
+      }
+    },
+    "superpowers": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777932301,
+        "narHash": "sha256-3E3rO6hR87JUfS3XV1Eaoz6SDWOftleWvN9UPNFEMjw=",
+        "owner": "obra",
+        "repo": "superpowers",
+        "rev": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "obra",
+        "repo": "superpowers",
+        "rev": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+        "type": "github"
       }
     },
     "systems": {

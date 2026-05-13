@@ -11,7 +11,10 @@ let
       (import ../modules/nixos { inherit inputs; })
       {
         boot.loader.grub.enable = false;
-        fileSystems."/".device = "test-root";
+        fileSystems."/" = {
+          device = "test-root";
+          fsType = "ext4";
+        };
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = "25.05";
 
@@ -26,6 +29,7 @@ let
           home.stateVersion = "25.05";
           programs.ai-tools = {
             enable = true;
+            mcp.servers.memory.enable = true;
             tools.opencode.enable = true;
             tools.opencode.profiles.work = {
               commandName = "ocw";

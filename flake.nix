@@ -39,6 +39,16 @@
       flake = false;
     };
 
+    superpowers = {
+      url = "github:obra/superpowers/f2cbfbefebbfef77321e4c9abc9e949826bea9d7";
+      flake = false;
+    };
+
+    mattpocock-skills = {
+      url = "github:mattpocock/skills/f304057d61d3df3c9fd992ac2b6e3833cb9325fb";
+      flake = false;
+    };
+
     mcp-openrouter-search.url = "github:Kukkerem/mcp-openrouter-search/v0.1.4";
   };
 
@@ -158,6 +168,7 @@
           claude-code = packageSets.toolPackages.claudeCode;
           codex = packageSets.toolPackages.codex;
           opencode = packageSets.toolPackages.opencode;
+          omp = packageSets.toolPackages.omp;
         }
       );
 
