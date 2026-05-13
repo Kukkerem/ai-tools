@@ -227,7 +227,7 @@
                           memoryDir = "opencode-work";
                           servers = {
                             context7.enable = false;
-                            openrouterSearch = {
+                            openrouter-search = {
                               enable = true;
                               apiKeyFile = "/run/secrets/openrouter-work-api-key";
                             };
@@ -244,7 +244,7 @@
                     };
                     mcp = {
                       servers = {
-                        sequentialThinking.enable = true;
+                        sequential-thinking.enable = true;
                         git.enable = true;
                         context7.enable = true;
                         time.enable = true;

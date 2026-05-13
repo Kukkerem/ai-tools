@@ -33,7 +33,7 @@ All four share the same agents, commands, and skills from `ai-tools/`. Each tool
 
 | Server | Type | Requires |
 |--------|------|----------|
-| `sequentialThinking` | Local | — |
+| `sequential-thinking` | Local | — |
 | `git` | Local | — |
 | `context7` | Local | — |
 | `nixos` | Local | NixOS config path |
@@ -44,17 +44,17 @@ All four share the same agents, commands, and skills from `ai-tools/`. Each tool
 | `playwright` | Local | Chromium |
 | `filesystem` | Local | Allowed paths |
 | `notebooklm` | Local | Google auth |
-| `basicMemory` | Local | — |
+| `basic-memory` | Local | — |
 | `terraform` | Local | — |
 | `qmd` | Remote | URL |
 | `deepwiki` | Remote | — |
 | `exa` | Remote | — |
-| `openrouterSearch` | Mixed | API key or env var |
+| `openrouter-search` | Mixed | API key or env var |
 
 ```nix
 programs.ai-tools.mcp = {
   servers = {
-    sequentialThinking.enable = true;
+    sequential-thinking.enable = true;
     git.enable = true;
     memory.enable = true;
     serena.enable = true;
@@ -90,7 +90,7 @@ programs.ai-tools.tools.opencode.profiles.work.mcp.inheritGlobal = false;
 Secrets stay outside Nix — use `apiKeyFile` or environment variables:
 
 ```nix
-programs.ai-tools.mcp.servers.openrouterSearch = {
+programs.ai-tools.mcp.servers.openrouter-search = {
   enable = true;
   apiKeyFile = "/run/secrets/openrouter-api-key";
 };

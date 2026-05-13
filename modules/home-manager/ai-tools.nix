@@ -93,7 +93,7 @@ let
 
   mkEnabledMcpServerNames =
     profileMcp:
-    optionals (mkMcpServerEnable profileMcp "sequentialThinking") [
+    optionals (mkMcpServerEnable profileMcp "sequential-thinking") [
       "sequential-thinking"
     ]
     ++ optionals (mkMcpServerEnable profileMcp "git") [ "git" ]
@@ -112,7 +112,7 @@ let
     ++ optionals (mkMcpServerEnable profileMcp "notebooklm") [
       "notebooklm"
     ]
-    ++ optionals (mkMcpServerEnable profileMcp "basicMemory") [
+    ++ optionals (mkMcpServerEnable profileMcp "basic-memory") [
       "basic-memory"
     ]
     ++ optionals (mkMcpServerEnable profileMcp "terraform") [
@@ -121,7 +121,7 @@ let
     ++ optionals (mkMcpServerEnable profileMcp "qmd") [ "qmd" ]
     ++ optionals (mkMcpServerEnable profileMcp "deepwiki") [ "deepwiki" ]
     ++ optionals (mkMcpServerEnable profileMcp "exa") [ "exa" ]
-    ++ optionals (mkMcpServerEnable profileMcp "openrouterSearch") [
+    ++ optionals (mkMcpServerEnable profileMcp "openrouter-search") [
       "openrouter-search"
     ];
 
@@ -213,7 +213,7 @@ let
     extraServers = { };
     servers = lib.recursiveUpdate (lib.mapAttrs (_: _: { enable = null; }) cfg.mcp.servers) {
       qmd.url = null;
-      openrouterSearch = {
+      openrouter-search = {
         apiKey = null;
         apiKeyFile = null;
         env = { };
@@ -226,7 +226,7 @@ let
   mkProfileMcpConfig =
     profileMcp:
     let
-      profileOpenrouter = profileMcp.servers.openrouterSearch;
+      profileOpenrouter = profileMcp.servers.openrouter-search;
       hasProfileOpenrouterSecret =
         profileOpenrouter.apiKey != null || profileOpenrouter.apiKeyFile != null;
     in
@@ -246,18 +246,18 @@ let
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKey
         else if profileMcp.inheritGlobal or true then
-          cfg.mcp.servers.openrouterSearch.apiKey
+          cfg.mcp.servers.openrouter-search.apiKey
         else
           null;
       openrouterSearchApiKeyFile =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKeyFile
         else if profileMcp.inheritGlobal or true then
-          cfg.mcp.servers.openrouterSearch.apiKeyFile
+          cfg.mcp.servers.openrouter-search.apiKeyFile
         else
           null;
       openrouterSearchEnv =
-        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouterSearch.env
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouter-search.env
         // profileOpenrouter.env;
       serverOverrides =
         optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.serverOverrides
@@ -719,7 +719,7 @@ let
   mkOmpMcpConfig =
     profileMcp:
     let
-      profileOpenrouter = profileMcp.servers.openrouterSearch;
+      profileOpenrouter = profileMcp.servers.openrouter-search;
       hasProfileOpenrouterSecret =
         profileOpenrouter.apiKey != null || profileOpenrouter.apiKeyFile != null;
     in
@@ -739,18 +739,18 @@ let
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKey
         else if profileMcp.inheritGlobal or true then
-          cfg.mcp.servers.openrouterSearch.apiKey
+          cfg.mcp.servers.openrouter-search.apiKey
         else
           null;
       openrouterSearchApiKeyFile =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKeyFile
         else if profileMcp.inheritGlobal or true then
-          cfg.mcp.servers.openrouterSearch.apiKeyFile
+          cfg.mcp.servers.openrouter-search.apiKeyFile
         else
           null;
       openrouterSearchEnv =
-        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouterSearch.env
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouter-search.env
         // profileOpenrouter.env;
       serverOverrides =
         optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.serverOverrides
@@ -1460,7 +1460,7 @@ in
                     };
 
                     servers = {
-                      sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server";
+                      sequential-thinking = mkProfileServerOption "the sequential-thinking MCP server";
                       git = mkProfileServerOption "the git MCP server";
                       context7 = mkProfileServerOption "the Context7 MCP server";
                       nixos = mkProfileServerOption "the nixos MCP server";
@@ -1471,7 +1471,7 @@ in
                       playwright = mkProfileServerOption "the playwright MCP server";
                       filesystem = mkProfileServerOption "the filesystem MCP server";
                       notebooklm = mkProfileServerOption "the NotebookLM MCP server";
-                      basicMemory = mkProfileServerOption "the Basic Memory MCP server";
+                      basic-memory = mkProfileServerOption "the Basic Memory MCP server";
                       terraform = mkProfileServerOption "the Terraform MCP server";
                       qmd = mkProfileServerOption "the QMD MCP server" // {
                         url = mkOption {
@@ -1482,7 +1482,7 @@ in
                       };
                       deepwiki = mkProfileServerOption "the DeepWiki MCP server";
                       exa = mkProfileServerOption "the Exa MCP server";
-                      openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server" // {
+                      openrouter-search = mkProfileServerOption "the OpenRouter Search MCP server" // {
                         apiKey = mkOption {
                           type = types.nullOr types.str;
                           default = null;
@@ -1762,7 +1762,7 @@ in
           };
 
           servers = {
-            sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server for omp";
+            sequential-thinking = mkProfileServerOption "the sequential-thinking MCP server for omp";
             git = mkProfileServerOption "the git MCP server for omp";
             context7 = mkProfileServerOption "the Context7 MCP server for omp";
             nixos = mkProfileServerOption "the nixos MCP server for omp";
@@ -1773,7 +1773,7 @@ in
             playwright = mkProfileServerOption "the playwright MCP server for omp";
             filesystem = mkProfileServerOption "the filesystem MCP server for omp";
             notebooklm = mkProfileServerOption "the NotebookLM MCP server for omp";
-            basicMemory = mkProfileServerOption "the Basic Memory MCP server for omp";
+            basic-memory = mkProfileServerOption "the Basic Memory MCP server for omp";
             terraform = mkProfileServerOption "the Terraform MCP server for omp";
             qmd = mkProfileServerOption "the QMD MCP server for omp" // {
               url = mkOption {
@@ -1784,7 +1784,7 @@ in
             };
             deepwiki = mkProfileServerOption "the DeepWiki MCP server for omp";
             exa = mkProfileServerOption "the Exa MCP server for omp";
-            openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server for omp" // {
+            openrouter-search = mkProfileServerOption "the OpenRouter Search MCP server for omp" // {
               apiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
@@ -1947,7 +1947,7 @@ in
                     };
 
                     servers = {
-                      sequentialThinking = mkProfileServerOption "the sequential-thinking MCP server";
+                      sequential-thinking = mkProfileServerOption "the sequential-thinking MCP server";
                       git = mkProfileServerOption "the git MCP server";
                       context7 = mkProfileServerOption "the Context7 MCP server";
                       nixos = mkProfileServerOption "the nixos MCP server";
@@ -1958,7 +1958,7 @@ in
                       playwright = mkProfileServerOption "the playwright MCP server";
                       filesystem = mkProfileServerOption "the filesystem MCP server";
                       notebooklm = mkProfileServerOption "the NotebookLM MCP server";
-                      basicMemory = mkProfileServerOption "the Basic Memory MCP server";
+                      basic-memory = mkProfileServerOption "the Basic Memory MCP server";
                       terraform = mkProfileServerOption "the Terraform MCP server";
                       qmd = mkProfileServerOption "the QMD MCP server" // {
                         url = mkOption {
@@ -1969,7 +1969,7 @@ in
                       };
                       deepwiki = mkProfileServerOption "the DeepWiki MCP server";
                       exa = mkProfileServerOption "the Exa MCP server";
-                      openrouterSearch = mkProfileServerOption "the OpenRouter Search MCP server" // {
+                      openrouter-search = mkProfileServerOption "the OpenRouter Search MCP server" // {
                         apiKey = mkOption {
                           type = types.nullOr types.str;
                           default = null;
@@ -2027,7 +2027,7 @@ in
       };
 
       servers = {
-        sequentialThinking = mkServerOption "the sequential-thinking MCP server" false;
+        sequential-thinking = mkServerOption "the sequential-thinking MCP server" false;
         git = mkServerOption "the git MCP server" false;
         context7 = mkServerOption "the Context7 MCP server" false;
         nixos = mkServerOption "the nixos MCP server" false;
@@ -2038,7 +2038,7 @@ in
         playwright = mkServerOption "the playwright MCP server" false;
         filesystem = mkServerOption "the filesystem MCP server" false;
         notebooklm = mkServerOption "the NotebookLM MCP server" false;
-        basicMemory = mkServerOption "the Basic Memory MCP server" false;
+        basic-memory = mkServerOption "the Basic Memory MCP server" false;
         terraform = mkServerOption "the Terraform MCP server" false;
         qmd = mkServerOption "a QMD remote MCP server" false // {
           url = mkOption {
@@ -2049,7 +2049,7 @@ in
         };
         deepwiki = mkServerOption "the DeepWiki remote MCP server" false;
         exa = mkServerOption "the Exa remote MCP server" false;
-        openrouterSearch = mkServerOption "the OpenRouter Search MCP server" false // {
+        openrouter-search = mkServerOption "the OpenRouter Search MCP server" false // {
           apiKey = mkOption {
             type = types.nullOr types.str;
             default = null;
@@ -2280,7 +2280,7 @@ in
       programs.ai-tools.skills.notebooklm.enable = mkDefault true;
     })
 
-    (mkIf cfg.mcp.servers.basicMemory.enable {
+    (mkIf cfg.mcp.servers.basic-memory.enable {
       programs.ai-tools.skills.basicMemory.enable = mkDefault true;
     })
 

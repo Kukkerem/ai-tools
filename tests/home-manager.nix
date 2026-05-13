@@ -36,7 +36,7 @@ let
                   memoryDir = "opencode-work";
                   servers = {
                     context7.enable = false;
-                    openrouterSearch = {
+                    openrouter-search = {
                       enable = true;
                       apiKeyFile = "/run/secrets/openrouter-work-api-key";
                     };
