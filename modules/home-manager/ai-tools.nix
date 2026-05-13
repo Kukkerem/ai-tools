@@ -49,6 +49,25 @@ let
     };
   };
 
+  mkMcpInheritGlobalOption =
+    default: description:
+    mkOption {
+      type = types.bool;
+      inherit default description;
+    };
+
+  mkProfileMcpInheritGlobalOption =
+    defaultDescription:
+    mkOption {
+      type = types.nullOr types.bool;
+      default = null;
+      description = ''
+        Optional per-profile override for whether this MCP config inherits global
+        `programs.ai-tools.mcp.*` servers, overrides, extra servers, and secrets.
+        Defaults to ${defaultDescription}.
+      '';
+    };
+
   mkProgramOption =
     programName:
     mkOption {
@@ -61,45 +80,50 @@ let
     };
 
   mkMcpServerEnable =
-    server: profileServer: if profileServer.enable != null then profileServer.enable else server.enable;
+    profileMcp: serverName:
+    let
+      profileServer = profileMcp.servers.${serverName};
+    in
+    if profileServer.enable != null then
+      profileServer.enable
+    else if profileMcp.inheritGlobal or true then
+      cfg.mcp.servers.${serverName}.enable
+    else
+      false;
 
   mkEnabledMcpServerNames =
     profileMcp:
-    optionals
-      (mkMcpServerEnable cfg.mcp.servers.sequentialThinking profileMcp.servers.sequentialThinking)
-      [
-        "sequential-thinking"
-      ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.git profileMcp.servers.git) [ "git" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.context7 profileMcp.servers.context7) [ "context7" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.nixos profileMcp.servers.nixos) [ "nixos" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.time profileMcp.servers.time) [ "time" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.fetch profileMcp.servers.fetch) [ "fetch" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.memory profileMcp.servers.memory) [ "memory" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.serena profileMcp.servers.serena) [ "serena" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.playwright profileMcp.servers.playwright) [
+    optionals (mkMcpServerEnable profileMcp "sequentialThinking") [
+      "sequential-thinking"
+    ]
+    ++ optionals (mkMcpServerEnable profileMcp "git") [ "git" ]
+    ++ optionals (mkMcpServerEnable profileMcp "context7") [ "context7" ]
+    ++ optionals (mkMcpServerEnable profileMcp "nixos") [ "nixos" ]
+    ++ optionals (mkMcpServerEnable profileMcp "time") [ "time" ]
+    ++ optionals (mkMcpServerEnable profileMcp "fetch") [ "fetch" ]
+    ++ optionals (mkMcpServerEnable profileMcp "memory") [ "memory" ]
+    ++ optionals (mkMcpServerEnable profileMcp "serena") [ "serena" ]
+    ++ optionals (mkMcpServerEnable profileMcp "playwright") [
       "playwright"
     ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.filesystem profileMcp.servers.filesystem) [
+    ++ optionals (mkMcpServerEnable profileMcp "filesystem") [
       "filesystem"
     ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.notebooklm profileMcp.servers.notebooklm) [
+    ++ optionals (mkMcpServerEnable profileMcp "notebooklm") [
       "notebooklm"
     ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.basicMemory profileMcp.servers.basicMemory) [
+    ++ optionals (mkMcpServerEnable profileMcp "basicMemory") [
       "basic-memory"
     ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.terraform profileMcp.servers.terraform) [
+    ++ optionals (mkMcpServerEnable profileMcp "terraform") [
       "terraform"
     ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.qmd profileMcp.servers.qmd) [ "qmd" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.deepwiki profileMcp.servers.deepwiki) [ "deepwiki" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.exa profileMcp.servers.exa) [ "exa" ]
-    ++
-      optionals (mkMcpServerEnable cfg.mcp.servers.openrouterSearch profileMcp.servers.openrouterSearch)
-        [
-          "openrouter-search"
-        ];
+    ++ optionals (mkMcpServerEnable profileMcp "qmd") [ "qmd" ]
+    ++ optionals (mkMcpServerEnable profileMcp "deepwiki") [ "deepwiki" ]
+    ++ optionals (mkMcpServerEnable profileMcp "exa") [ "exa" ]
+    ++ optionals (mkMcpServerEnable profileMcp "openrouterSearch") [
+      "openrouter-search"
+    ];
 
   cavemanSkillNames = [
     "caveman"
@@ -176,7 +200,15 @@ let
     else
       { text = skill; };
 
+  removeNullMcpValues =
+    attrs:
+    lib.filterAttrs (_: value: value != null && value != { }) (
+      lib.mapAttrs (_: value: if builtins.isAttrs value then removeNullMcpValues value else value) attrs
+    );
+
   defaultProfileMcp = {
+    inheritGlobal = true;
+    memoryDir = null;
     serverOverrides = { };
     extraServers = { };
     servers = lib.recursiveUpdate (lib.mapAttrs (_: _: { enable = null; }) cfg.mcp.servers) {
@@ -204,26 +236,46 @@ let
       memoryBaseDir = cfg.mcp.memoryBaseDir;
       memoryDir = profileMcp.memoryDir;
       qmdUrl =
-        if profileMcp.servers.qmd.url != null then profileMcp.servers.qmd.url else cfg.mcp.servers.qmd.url;
+        if profileMcp.servers.qmd.url != null then
+          profileMcp.servers.qmd.url
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.qmd.url
+        else
+          null;
       openrouterSearchApiKey =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKey
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.openrouterSearch.apiKey
         else
-          cfg.mcp.servers.openrouterSearch.apiKey;
+          null;
       openrouterSearchApiKeyFile =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKeyFile
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.openrouterSearch.apiKeyFile
         else
-          cfg.mcp.servers.openrouterSearch.apiKeyFile;
-      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env // profileOpenrouter.env;
-      serverOverrides = cfg.mcp.serverOverrides // profileMcp.serverOverrides;
-      extraServers = cfg.mcp.extraServers // profileMcp.extraServers;
+          null;
+      openrouterSearchEnv =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouterSearch.env
+        // profileOpenrouter.env;
+      serverOverrides =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.serverOverrides
+        // profileMcp.serverOverrides;
+      extraServers =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.extraServers // profileMcp.extraServers;
     };
 
   mkToolMcpServers =
-    toolName: builder:
+    toolName: inheritGlobal: builder:
     builder (
-      mkProfileMcpConfig (globalMcpForTools // { memoryDir = "${cfg.profileName}-${toolName}"; })
+      mkProfileMcpConfig (
+        globalMcpForTools
+        // {
+          inherit inheritGlobal;
+          memoryDir = "${cfg.profileName}-${toolName}";
+        }
+      )
     );
 
   mkOpencodeMcpServers = profileMcp: mcp.forOpenCode (mkProfileMcpConfig profileMcp);
@@ -351,7 +403,7 @@ let
 
     analytics.enabled = false;
 
-    mcp_servers = mkToolMcpServers "codex" mcp.forCodex;
+    mcp_servers = mkToolMcpServers "codex" cfg.tools.codex.mcp.inheritGlobal mcp.forCodex;
   };
 
   codexSettings = lib.recursiveUpdate (lib.recursiveUpdate codexDefaultSettings cfg.tools.codex.settings) cfg.tools.codex.extraSettings;
@@ -533,11 +585,11 @@ let
       dcp
       rtk
       ;
-    mcp = {
+    mcp = defaultProfileMcp // {
       enable = true;
+      inheritGlobal = cfg.tools.opencode.mcp.inheritGlobal;
       memoryDir = "${cfg.profileName}-opencode";
-    }
-    // defaultProfileMcp;
+    };
     extraFiles = { };
     extraRuntimePackages = [ ];
   };
@@ -547,7 +599,17 @@ let
     let
       baseProfile =
         if name == "default" then lib.recursiveUpdate legacyOpencodeProfile profile else profile;
-      baseProfileMcp = lib.recursiveUpdate defaultProfileMcp baseProfile.mcp;
+      profileMcpWithoutInheritGlobal = lib.removeAttrs (removeNullMcpValues (baseProfile.mcp or { })) [
+        "inheritGlobal"
+      ];
+      profileMcpInheritGlobal =
+        if (baseProfile.mcp or { }).inheritGlobal != null then
+          baseProfile.mcp.inheritGlobal
+        else
+          cfg.tools.opencode.mcp.inheritGlobal;
+      baseProfileMcp = lib.recursiveUpdate defaultProfileMcp profileMcpWithoutInheritGlobal // {
+        inheritGlobal = profileMcpInheritGlobal;
+      };
     in
     baseProfile
     // {
@@ -654,44 +716,6 @@ let
 
   # ── omp config generation ──
 
-  mkOmpMcpEnabledServerNames =
-    profileMcp:
-    optionals
-      (mkMcpServerEnable cfg.mcp.servers.sequentialThinking profileMcp.servers.sequentialThinking)
-      [
-        "sequential-thinking"
-      ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.git profileMcp.servers.git) [ "git" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.context7 profileMcp.servers.context7) [ "context7" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.nixos profileMcp.servers.nixos) [ "nixos" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.time profileMcp.servers.time) [ "time" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.fetch profileMcp.servers.fetch) [ "fetch" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.memory profileMcp.servers.memory) [ "memory" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.serena profileMcp.servers.serena) [ "serena" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.playwright profileMcp.servers.playwright) [
-      "playwright"
-    ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.filesystem profileMcp.servers.filesystem) [
-      "filesystem"
-    ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.notebooklm profileMcp.servers.notebooklm) [
-      "notebooklm"
-    ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.basicMemory profileMcp.servers.basicMemory) [
-      "basic-memory"
-    ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.terraform profileMcp.servers.terraform) [
-      "terraform"
-    ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.qmd profileMcp.servers.qmd) [ "qmd" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.deepwiki profileMcp.servers.deepwiki) [ "deepwiki" ]
-    ++ optionals (mkMcpServerEnable cfg.mcp.servers.exa profileMcp.servers.exa) [ "exa" ]
-    ++
-      optionals (mkMcpServerEnable cfg.mcp.servers.openrouterSearch profileMcp.servers.openrouterSearch)
-        [
-          "openrouter-search"
-        ];
-
   mkOmpMcpConfig =
     profileMcp:
     let
@@ -700,25 +724,39 @@ let
         profileOpenrouter.apiKey != null || profileOpenrouter.apiKeyFile != null;
     in
     {
-      enabledServerNames = mkOmpMcpEnabledServerNames profileMcp;
+      enabledServerNames = mkEnabledMcpServerNames profileMcp;
       filesystemAllowedPaths = cfg.mcp.filesystem.allowedPaths;
       memoryBaseDir = cfg.mcp.memoryBaseDir;
       memoryDir = profileMcp.memoryDir;
       qmdUrl =
-        if profileMcp.servers.qmd.url != null then profileMcp.servers.qmd.url else cfg.mcp.servers.qmd.url;
+        if profileMcp.servers.qmd.url != null then
+          profileMcp.servers.qmd.url
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.qmd.url
+        else
+          null;
       openrouterSearchApiKey =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKey
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.openrouterSearch.apiKey
         else
-          cfg.mcp.servers.openrouterSearch.apiKey;
+          null;
       openrouterSearchApiKeyFile =
         if hasProfileOpenrouterSecret then
           profileOpenrouter.apiKeyFile
+        else if profileMcp.inheritGlobal or true then
+          cfg.mcp.servers.openrouterSearch.apiKeyFile
         else
-          cfg.mcp.servers.openrouterSearch.apiKeyFile;
-      openrouterSearchEnv = cfg.mcp.servers.openrouterSearch.env // profileOpenrouter.env;
-      serverOverrides = cfg.mcp.serverOverrides // profileMcp.serverOverrides;
-      extraServers = cfg.mcp.extraServers // profileMcp.extraServers;
+          null;
+      openrouterSearchEnv =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.servers.openrouterSearch.env
+        // profileOpenrouter.env;
+      serverOverrides =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.serverOverrides
+        // profileMcp.serverOverrides;
+      extraServers =
+        optionalAttrs (profileMcp.inheritGlobal or true) cfg.mcp.extraServers // profileMcp.extraServers;
     };
 
   mkOmpGeneratedConfig =
@@ -830,6 +868,7 @@ let
     };
     mcp = {
       enable = cfg.tools.omp.mcp.enable;
+      inheritGlobal = cfg.tools.omp.mcp.inheritGlobal;
       memoryDir =
         if cfg.tools.omp.mcp.memoryDir != null then
           cfg.tools.omp.mcp.memoryDir
@@ -837,16 +876,7 @@ let
           "${cfg.profileName}-omp";
       serverOverrides = cfg.tools.omp.mcp.serverOverrides;
       extraServers = cfg.tools.omp.mcp.extraServers;
-      servers =
-        lib.recursiveUpdate (lib.mapAttrs (_: _: { enable = null; }) cfg.mcp.servers) {
-          qmd.url = null;
-          openrouterSearch = {
-            apiKey = null;
-            apiKeyFile = null;
-            env = { };
-          };
-        }
-        // cfg.tools.omp.mcp.servers;
+      servers = defaultProfileMcp.servers // cfg.tools.omp.mcp.servers;
     };
   };
 
@@ -856,11 +886,25 @@ let
       baseProfile = recursiveUpdate legacyOmpProfile profile;
       hooksProfile = lib.filterAttrs (_: hook: hook.enable != null) (profile.hooks or { });
       hooksEnable = recursiveUpdate legacyOmpProfile.hooks hooksProfile;
-      profileMcp = recursiveUpdate {
-        serverOverrides = { };
-        extraServers = { };
-        servers = legacyOmpProfile.mcp.servers;
-      } (baseProfile.mcp or { });
+      profileMcpWithoutInheritGlobal = lib.removeAttrs (removeNullMcpValues (baseProfile.mcp or { })) [
+        "inheritGlobal"
+      ];
+      profileMcpInheritGlobal =
+        if (baseProfile.mcp or { }).inheritGlobal != null then
+          baseProfile.mcp.inheritGlobal
+        else
+          cfg.tools.omp.mcp.inheritGlobal;
+      profileMcp =
+        recursiveUpdate {
+          enable = legacyOmpProfile.mcp.enable;
+          inheritGlobal = profileMcpInheritGlobal;
+          serverOverrides = { };
+          extraServers = { };
+          servers = legacyOmpProfile.mcp.servers;
+        } profileMcpWithoutInheritGlobal
+        // {
+          inheritGlobal = profileMcpInheritGlobal;
+        };
     in
     baseProfile
     // {
@@ -975,6 +1019,11 @@ in
 
         program = mkProgramOption "programs.claude-code";
 
+        mcp.inheritGlobal = mkMcpInheritGlobalOption true ''
+          Whether Claude Code MCP config starts from global
+          `programs.ai-tools.mcp.*` servers and raw server definitions.
+        '';
+
         model = mkOption {
           type = types.str;
           default = "claude-sonnet-4-6";
@@ -1000,6 +1049,11 @@ in
         };
 
         program = mkProgramOption "programs.codex";
+
+        mcp.inheritGlobal = mkMcpInheritGlobalOption true ''
+          Whether Codex MCP config starts from global
+          `programs.ai-tools.mcp.*` servers and raw server definitions.
+        '';
 
         model = mkOption {
           type = types.str;
@@ -1063,6 +1117,12 @@ in
         };
 
         program = mkProgramOption "programs.opencode";
+
+        mcp.inheritGlobal = mkMcpInheritGlobalOption true ''
+          Whether OpenCode profiles inherit global `programs.ai-tools.mcp.*`
+          servers, overrides, extra servers, and secrets by default. Individual
+          profiles can override this with `tools.opencode.profiles.<name>.mcp.inheritGlobal`.
+        '';
 
         permission = mkOption {
           type = types.attrsOf types.anything;
@@ -1379,6 +1439,8 @@ in
                       default = true;
                     };
 
+                    inheritGlobal = mkProfileMcpInheritGlobalOption "`tools.opencode.mcp.inheritGlobal`";
+
                     memoryDir = mkOption {
                       type = types.nullOr types.str;
                       default = null;
@@ -1676,6 +1738,11 @@ in
             default = true;
           };
 
+          inheritGlobal = mkMcpInheritGlobalOption true ''
+            Whether omp MCP config starts from global `programs.ai-tools.mcp.*`
+            servers, overrides, extra servers, and secrets.
+          '';
+
           memoryDir = mkOption {
             type = types.nullOr types.str;
             default = null;
@@ -1858,6 +1925,8 @@ in
                       default = null;
                       description = "Per-profile MCP enable override.";
                     };
+
+                    inheritGlobal = mkProfileMcpInheritGlobalOption "`tools.omp.mcp.inheritGlobal`";
 
                     memoryDir = mkOption {
                       type = types.nullOr types.str;
@@ -2109,7 +2178,9 @@ in
         {
           enable = true;
           package = mkDefault llmAgents.claude-code;
-          mcpServers = mkDefault (mkToolMcpServers "claudecode" mcp.forClaudeCode);
+          mcpServers = mkDefault (
+            mkToolMcpServers "claudecode" cfg.tools.claudeCode.mcp.inheritGlobal mcp.forClaudeCode
+          );
           settings = mkDefault claudeCodeSettings;
           agents = aiTools.claudeCode.agents;
           commands = aiTools.claudeCode.commands;

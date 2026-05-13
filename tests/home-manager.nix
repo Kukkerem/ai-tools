@@ -44,6 +44,13 @@ let
                   extraServers.cloudflare-docs.url = "https://docs.mcp.cloudflare.com/mcp";
                 };
               };
+              profiles.isolated = {
+                commandName = null;
+                mcp = {
+                  inheritGlobal = false;
+                  servers.git.enable = true;
+                };
+              };
             };
             tools.omp = {
               enable = true;
@@ -146,12 +153,14 @@ pkgs.runCommand "ai-tools-home-manager-tests"
   ''
     default_config=${generation}/home-files/.config/opencode/opencode.json
     work_config=${generation}/home-files/.config/opencode-work/opencode.jsonc
+    isolated_config=${generation}/home-files/.config/opencode-isolated/opencode.jsonc
     work_plugin_config=${generation}/home-files/.config/opencode-work/plugin-config.jsonc
     work_wrapper=${generation}/home-path/bin/ocw
     work_run_wrapper=${generation}/home-path/bin/ocw-run
 
     test -f "$default_config"
     test -f "$work_config"
+    test -f "$isolated_config"
     test -f "$work_plugin_config"
     test -x "$work_wrapper"
     test -x "$work_run_wrapper"
@@ -165,6 +174,10 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     jq -e '.mcp."cloudflare-docs".url == "https://docs.mcp.cloudflare.com/mcp"' "$work_config" >/dev/null
     jq -e '.mcp."openrouter-search".environment.OPENROUTER_API_KEY_FILE == "/run/secrets/openrouter-work-api-key"' "$work_config" >/dev/null
     jq -e '.mcp.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/opencode-work/memory.json"' "$work_config" >/dev/null
+
+    jq -e '.mcp.git.enabled == true' "$isolated_config" >/dev/null
+    jq -e '.mcp.context7 == null' "$isolated_config" >/dev/null
+    jq -e '.mcp.memory == null' "$isolated_config" >/dev/null
 
     jq -e '.enabled == true' "$work_plugin_config" >/dev/null
     jq -e '.nested.option == "value"' "$work_plugin_config" >/dev/null
@@ -220,6 +233,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test "$(yq '.enabledModels == null' $omp_default_models)" = "true"
     test "$(yq '.providers.local.models[0]' $omp_default_models)" = "local/test"
     jq -e '.mcpServers.memory.env.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/custom-omp/memory.json"' "$omp_default_mcp" >/dev/null
+    jq -e '.mcpServers.context7 != null' "$omp_default_mcp" >/dev/null
 
     grep -F 'export PI_CONFIG_DIR=.omp' "$omp_wrapper" >/dev/null
     grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null

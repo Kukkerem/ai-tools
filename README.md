@@ -44,7 +44,7 @@ All four share the same agents, commands, and skills from `ai-tools/`. Each tool
 | `playwright` | Local | Chromium |
 | `filesystem` | Local | Allowed paths |
 | `notebooklm` | Local | Google auth |
-| `basic-memory` | Local | — |
+| `basicMemory` | Local | — |
 | `terraform` | Local | — |
 | `qmd` | Remote | URL |
 | `deepwiki` | Remote | — |
@@ -76,6 +76,15 @@ programs.ai-tools.mcp = {
     args = [ "--stdio" ];
   };
 };
+```
+
+Each agent controls whether it inherits from global MCP defaults:
+
+```nix
+# All agents inherit (default).
+programs.ai-tools.tools.opencode.mcp.inheritGlobal = true;   # or false
+# Per-profile override:
+programs.ai-tools.tools.opencode.profiles.work.mcp.inheritGlobal = false;
 ```
 
 Secrets stay outside Nix — use `apiKeyFile` or environment variables:
