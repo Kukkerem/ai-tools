@@ -1,661 +1,363 @@
 # ai-tools
 
-Reusable AI CLI setup as a standalone flake.
+Reusable Home Manager AI tools flake. One module to configure Claude Code, Codex, OpenCode, and omp with shared skills, agents, commands, and MCP servers.
 
-It exposes a Home Manager module that bundles:
-
-- Claude Code
-- Codex
-- OpenCode
-- Shared prompts, agents, and skills
-- Individually toggleable local and remote MCP servers
-
-## Included MCPs
-
-This flake enables only local or low-friction MCPs by default. Remote/API-oriented MCPs are available, but disabled by default so consumers can opt in and provide secrets through their own configuration.
-
-Available MCP toggles:
-
-- `sequentialThinking`
-- `git`
-- `context7`
-- `nixos`
-- `time`
-- `fetch`
-- `memory`
-- `serena`
-- `playwright`
-- `filesystem`
-- `notebooklm`
-- `basicMemory`
-- `terraform`
-- `qmd`
-- `deepwiki`
-- `exa`
-- `openrouterSearch`
-
-Bundled skills are loaded from `ai-tools/skills`, including browser automation, Caveman modes, DCP, Basic Memory, NotebookLM, RTK, and Karpathy guidelines.
-
-## Flake outputs
-
-- `homeManagerModules.default`
-- `homeManagerModules.ai-tools`
-- `packages.<system>.default`
-- `packages.<system>.mcp`
-- `packages.<system>.claude-code`
-- `packages.<system>.codex`
-- `packages.<system>.opencode`
-- `devShells.<system>.default`
-- `lib.mkAiToolsDevShell`
-- `lib.mkAiToolsDevshellConfig`
-- `flakeModules.default`
-- `flakeModules.ai-tools-devshell`
-- `templates.local-dev`
-
-## Home Manager usage
+All options live under `programs.ai-tools`. Config files are fully managed by Nix — immutable, regenerated on every `home-manager switch`.
 
 ```nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    ai-tools.url = "github:your-org/ai-tools";
+programs.ai-tools = {
+  enable = true;
+  tools = {
+    claudeCode.enable = true;
+    codex.enable = true;
+    opencode.enable = true;
+    omp.enable = true;
   };
-
-  outputs = { nixpkgs, home-manager, ai-tools, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-      };
-    in
-    {
-      homeConfigurations.user = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
-        modules = [
-          ai-tools.homeManagerModules.default
-          {
-            home.username = "user";
-            home.homeDirectory = "/home/user";
-            home.stateVersion = "25.05";
-
-            programs.ai-tools = {
-              enable = true;
-              tools = {
-                claudeCode.enable = true;
-                codex.enable = true;
-                opencode.enable = true;
-              };
-              mcp.servers = {
-                sequentialThinking.enable = true;
-                git.enable = true;
-                context7.enable = false;
-                time.enable = true;
-                memory.enable = true;
-                serena.enable = true;
-                filesystem.enable = true;
-                nixos.enable = false;
-                fetch.enable = false;
-                playwright.enable = false;
-                deepwiki.enable = false;
-              };
-            };
-          }
-        ];
-      };
-    };
-}
-```
-
-## Local development flake usage
-
-You can scaffold an example with:
-
-```bash
-nix flake init -t github:your-org/ai-tools#local-dev
-```
-
-Or inspect the bundled template in `templates/local-dev`.
-
-The template exposes both a Home Manager configuration and a dev shell. Use the
-dev shell when you want project-local AI configs without running
-`home-manager switch`:
-
-```bash
-nix develop
-```
-
-### Existing flake with flake-parts
-
-If your project already uses flake-parts, prefer the flake module. It uses
-numtide's `devshell` module (`perSystem.devshells`) and still emits the normal
-`devShells.<system>.<name>` output:
-
-```nix
-{
-  inputs = {
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    ai-tools = {
-      url = "github:your-org/ai-tools";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
-  outputs = inputs@{ flake-parts, ai-tools, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [ "x86_64-linux" ];
-      imports = [ ai-tools.flakeModules.default ];
-
-      perSystem = { pkgs, ... }: {
-        ai-tools.devshells.default = {
-          aiTools = {
-            mcp.servers = {
-              git.enable = true;
-              filesystem.enable = true;
-              serena.enable = true;
-            };
-            tools.opencode.plugins = [
-              "my-opencode-plugin@latest"
-            ];
-          };
-          extraPackages = [ pkgs.ripgrep ];
-        };
-      };
-    };
-}
-```
-
-### Existing plain flake
-
-If your project does not use flake-parts, call the reusable helper directly:
-
-```nix
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    ai-tools = {
-      url = "github:your-org/ai-tools";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
-  outputs = { nixpkgs, ai-tools, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-      };
-    in
-    {
-      devShells.${system}.default = ai-tools.lib.mkAiToolsDevShell {
-        inherit pkgs;
-        aiTools = {
-          mcp.servers = {
-            git.enable = true;
-            filesystem.enable = true;
-            serena.enable = true;
-          };
-          tools.opencode.plugins = [
-            "my-opencode-plugin@latest"
-          ];
-        };
-      };
-    };
-}
-```
-
-Advanced users who already import `inputs.devshell.flakeModule` themselves can
-use `ai-tools.lib.mkAiToolsDevshellConfig { inherit pkgs; ...; }` inside
-`perSystem.devshells.<name>`.
-
-### Adding project-specific MCPs in a dev shell
-
-Use `aiTools.mcp.extraServers` from the consuming flake. Local stdio MCPs use
-`command` plus optional `args` and `env`; remote MCPs use `url`:
-
-```nix
-devShells.${system}.default = ai-tools.lib.mkAiToolsDevShell {
-  inherit pkgs;
-
-  aiTools = {
-    tools.opencode.enable = true;
-
-    mcp.extraServers = {
-      local-tool = {
-        command = "/path/to/example-mcp";
-        args = [ "--stdio" ];
-      };
-
-      remote-tool = {
-        url = "https://example.com/mcp";
-      };
-    };
-  };
-
-  # Add the package here too when the command comes from nixpkgs or another flake.
-  extraPackages = [ ];
 };
 ```
 
-To replace a built-in MCP, use `aiTools.mcp.serverOverrides.<name>` instead of
-`extraServers`.
+## AI Coding Agents
 
-## Direct shell usage
+| Agent | Module path | Wrapper | Supports |
+|-------|------------|---------|----------|
+| Claude Code | `tools.claudeCode` | `claude` | Agents, commands, skills, MCP, memory |
+| Codex | `tools.codex` | `codex` | Prompts, skills, MCP, memories |
+| OpenCode | `tools.opencode` | `opencode` | Profiles, LSP, DCP, RTK, MCP, agents/commands/skills |
+| omp (oh-my-pi) | `tools.omp` | `omp` | Profiles, hooks, extensions, MCP, agents/commands/skills |
 
-You can also use the flake directly as a development shell:
+All four share the same agents, commands, and skills from `ai-tools/`. Each tool gets config files generated under its own directory (`~/.claude/`, `~/.codex/`, `~/.config/opencode/`, `~/.omp/`).
 
-```bash
-nix develop github:your-org/ai-tools
-```
+## MCP Servers
 
-The shell provides the shared AI tool binaries, MCP-related runtime packages, and
-project-local generated config files under `.ai-tools/home`. The shell exports
-`HOME`, `XDG_CONFIG_HOME`, and `CODEX_HOME` to that project-local directory so
-Claude Code, Codex, and OpenCode can read the generated configs without changing
-your real home directory.
+17 servers available, **all disabled by default**. Enable only what you need:
 
-To test the generated dev-shell config locally:
-
-```bash
-nix develop . --command sh -lc '
-  test -f "$XDG_CONFIG_HOME/opencode/opencode.json" &&
-  test -f "$XDG_CONFIG_HOME/opencode/dcp.jsonc" &&
-  test -f "$XDG_CONFIG_HOME/rtk/config.toml" &&
-  test -f "$CODEX_HOME/config.toml" &&
-  test -f "$HOME/.claude/CLAUDE.md" &&
-  test -x "$(command -v opencode)" &&
-  test -x "$(command -v codex)" &&
-  test -x "$(command -v claude)" &&
-  printf "AI dev shell OK\nHOME=%s\n" "$HOME"
-'
-```
-
-Useful dev-shell knobs:
-
-```nix
-ai-tools.lib.mkAiToolsDevShell {
-  inherit pkgs;
-  aiTools = {
-    # Same shape as programs.ai-tools, without the top-level module path.
-    tools.codex.settings.model = "gpt-5.4";
-  };
-  extraPackages = [ pkgs.ripgrep ];
-  extraStartup = ''
-    echo "team project shell ready"
-  '';
-}
-```
-
-## Module options
-
-Main entrypoint:
+| Server | Type | Requires |
+|--------|------|----------|
+| `sequential-thinking` | Local | — |
+| `git` | Local | — |
+| `context7` | Local | — |
+| `nixos` | Local | NixOS config path |
+| `time` | Local | — |
+| `fetch` | Local | — |
+| `memory` | Local | Memory dir |
+| `serena` | Local | Project path |
+| `playwright` | Local | Chromium |
+| `filesystem` | Local | Allowed paths |
+| `notebooklm` | Local | Google auth |
+| `basic-memory` | Local | — |
+| `terraform` | Local | — |
+| `qmd` | Remote | URL |
+| `deepwiki` | Remote | — |
+| `exa` | Remote | — |
+| `openrouter-search` | Mixed | API key or env var |
 
 ```nix
-programs.ai-tools.enable = true;
+programs.ai-tools.mcp = {
+  servers = {
+    sequential-thinking.enable = true;
+    git.enable = true;
+    memory.enable = true;
+    serena.enable = true;
+    filesystem.enable = true;
+  };
+  filesystem.allowedPaths = [ "/home/user" "/work/project" ];
+  memoryBaseDir = "/home/user/.cache/ai-tools";
+};
 ```
 
-Useful options:
+Override or replace servers without editing this repo:
 
 ```nix
-programs.ai-tools.profileName = "work";
-programs.ai-tools.tools.opencode = {
-  # Model selection
-  model = "claude-sonnet-4-6";          # main model
-  smallModel = "openrouter/openai/gpt-5-nano";  # used for lightweight tasks
-  theme = "catppuccin";
-  disabledProviders = [ "github-copilot" ];
-
-  # LSP support — all enabled by default; disable what you don't need
-  lsp = {
-    gopls.enable = false;
-    pyright.enable = false;
-    terraformls.enable = false;
-  };
-
-  plugins = [
-    # Extra plugins only; auth plugins are included by default.
-    "my-opencode-plugin@latest"
-  ];
-
-  dcp = {
-    enable = true;
-    settings.compress.minContextLimit = 60000;
-    extraSettings.strategies.purgeErrors.turns = 2;
-  };
-
-  rtk = {
-    # enable = true by default — works out of the box via llm-agents
-    excludeCommands = [ "curl" "cat" ];  # skip RTK for these commands
-    tee = {
-      enable = true;   # log failed commands for debugging
-      mode = "failures";  # "failures" | "all"
-    };
-    telemetry.enable = false;
+programs.ai-tools.mcp = {
+  servers.deepwiki.enable = true;
+  serverOverrides.deepwiki.url = "https://custom-deepwiki.example.com/mcp";
+  extraServers.my-tool = {
+    command = "/path/to/my-mcp";
+    args = [ "--stdio" ];
   };
 };
-programs.ai-tools.mcp.memoryBaseDir = "/home/user/.cache/ai-tools";
-programs.ai-tools.mcp.filesystem.allowedPaths = [
-  "/home/user"
-  "/work/project"
-];
 ```
 
-### Multiple OpenCode Profiles
+Each agent controls whether it inherits from global MCP defaults:
 
-Top-level `programs.ai-tools.tools.opencode.*` options still configure the
-default OpenCode profile. Add `profiles` when you need additional isolated
-OpenCode configs and wrapper commands:
+```nix
+# All agents inherit (default).
+programs.ai-tools.tools.opencode.mcp.inheritGlobal = true;   # or false
+# Per-profile override:
+programs.ai-tools.tools.opencode.profiles.work.mcp.inheritGlobal = false;
+```
+
+Secrets stay outside Nix — use `apiKeyFile` or environment variables:
+
+```nix
+programs.ai-tools.mcp.servers.openrouter-search = {
+  enable = true;
+  apiKeyFile = "/run/secrets/openrouter-api-key";
+};
+```
+
+## Skills
+
+40 bundled skills, discovered by all four agents:
+
+| Skill | Description |
+|-------|-------------|
+| Base (6) | agent-browser, dcp, basic-memory, notebooklm, rtk, karpathy-guidelines |
+| Caveman variants (7) | caveman, caveman-commit, caveman-review, caveman-help, caveman-compress, caveman-stats, cavecrew |
+| Matt Pocock (13) | diagnose, grill-with-docs, triage, improve-codebase-architecture, setup-matt-pocock-skills, tdd, to-issues, to-prd, zoom-out, prototype, grill-me, handoff, write-a-skill |
+| Superpowers (14) | brainstorming, dispatching-parallel-agents, executing-plans, finishing-a-development-branch, receiving-code-review, requesting-code-review, subagent-driven-development, systematic-debugging, test-driven-development, using-git-worktrees, using-superpowers, verification-before-completion, writing-plans, writing-skills |
+
+## Commands
+
+22 bundled slash commands:
+
+**Nix** — `refactor`, `flake-update`, `module-scaffold`, `option-migrate`, `template-new`, `nix-check`
+
+**Git** — `add-and-format`, `review`, `commit-msg`, `commit-changes`
+
+**Quality** — `quick-check`, `deep-check`, `style-audit`, `dependency-audit`, `module-lint`
+
+**Project** — `changelog`
+
+**PRD** — `create-prds`, `generate-tasks`, `process-task-list`
+
+**Caveman** — `caveman`, `caveman-commit`, `caveman-review`
+
+## Agents
+
+8 specialized sub-agents:
+
+**General** — `code-reviewer`, `documenter`, `security-auditor`
+
+**Nix** — `nix-expert`, `flake-expert`, `module-expert`
+
+**Project** — `template-designer`, `system-config-expert`
+
+## OpenCode Profiles
+
+Multi-profile support for isolated OpenCode configs:
 
 ```nix
 programs.ai-tools.tools.opencode = {
   enable = true;
+  theme = "catppuccin";
+
+  lsp = {
+    nixd.enable = true;
+    pyright.enable = true;
+  };
+
+  dcp = {
+    enable = true;
+    settings.compress.minContextLimit = 60000;
+  };
+
+  rtk = {
+    enable = true;
+    excludeCommands = [ "curl" ];
+    tee = { enable = true; mode = "failures"; };
+  };
 
   profiles.work = {
     commandName = "ocw";
-    runCommandName = "ocw-run";
-
     configDir = ".config/opencode-work";
-    dataDir = ".local/share/opencode-work";
-    stateDir = ".local/state/opencode-work";
-
     theme = "nightowl";
-    plugins = [ "my-work-plugin@latest" ];
-    settings.experimental = true;
-
-    extraRuntimePackages = [
-      inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.oh-my-opencode
-    ];
-    extraFiles."base.md".text = builtins.readFile ./base.md;
-    extraFiles."plugin-config.jsonc".value = {
-      enabled = true;
-      nested.option = "value";
-    };
-
-    dcp.settings.compress.minContextLimit = 50000;
-    rtk.excludeCommands = [ "cat" ];
-
-    mcp = {
-      memoryDir = "opencode-work";
-      servers = {
-        context7.enable = false;
-        openrouterSearch = {
-          enable = true;
-          apiKeyFile = config.sops.secrets.openrouter-work-api-key.path;
-        };
-      };
-      extraServers.cloudflare-docs = {
-        url = "https://docs.mcp.cloudflare.com/mcp";
-      };
-    };
+    mcp.memoryDir = "opencode-work";
   };
 };
 ```
 
-Each generated wrapper exports `OPENCODE_CONFIG` and `OPENCODE_CONFIG_DIR` for
-its profile. `XDG_DATA_HOME` and `XDG_STATE_HOME` are exported when `dataDir` or
-`stateDir` are set.
+Each profile gets: isolated config dir, wrapper script, per-profile MCP config, DCP/RTK settings, and optional `dataDir`/`stateDir` isolation.
 
-`extraFiles` entries are relative to the profile config directory. Use `text` or
-`source` for normal Home Manager file forms, or `value` to render an attrset as
-JSON for plugin config files.
+## omp (oh-my-pi)
 
-Profile MCP settings inherit from global `programs.ai-tools.mcp` defaults.
-Per-profile `mcp.servers.<name>.enable`, OpenRouter secret settings,
-`serverOverrides`, and `extraServers` override or extend the global MCP config
-for that OpenCode profile only.
+Terminal-based coding agent with multi-provider support. Config generation includes `config.yml`, `models.yml`, MCP servers, agents, commands, skills, and TypeScript hooks.
 
-To wire NixOS options into OpenCode's `nixd` setup:
+```nix
+programs.ai-tools.tools.omp = {
+  enable = true;
+
+  env = {
+    ANTHROPIC_API_KEY = "...";
+  };
+
+  # Runtime secret files are read by the wrapper without copying secrets into
+  # the Nix store. Literal `env` values stay shell-safe and are not evaluated.
+  envFiles = {
+    OLLAMA_CLOUD_API_KEY = "/run/secrets/ollama-cloud-api-key";
+    OPENROUTER_API_KEY = "/run/secrets/openrouter-api-key";
+    OPENCODE_API_KEY = "/run/secrets/opencode-api-key";
+  };
+
+  # OMP reads model routing from config.yml.
+  settings = {
+    modelRoles.default = "ollama-cloud/glm-5.1";
+    modelRoles.plan = "openai-codex/gpt-5.5";
+    enabledModels = [
+      "ollama-cloud/glm-5.1"
+      "openai-codex/gpt-5.5"
+      "openrouter/anthropic/claude-sonnet-4.5"
+    ];
+    modelProviderOrder = [
+      "ollama-cloud"
+      "opencode"
+      "openai-codex"
+      "openrouter"
+    ];
+    disabledProviders = [ ];
+    retry = {
+      enabled = true;
+      maxRetries = 3;
+    };
+  };
+
+  # models.yml is reserved for provider registry data and equivalence/custom
+  # model definitions.
+  modelSettings.providers = { };
+
+  hooks = {
+    permissionGate.enable = true;   # blocks rm -rf, sudo, chmod 777
+    protectedPaths.enable = true;   # blocks writes to .env, .git/, node_modules/
+  };
+
+  mcp.servers = {
+    git.enable = true;
+    memory.enable = true;
+  };
+
+  compaction = {
+    enabled = true;
+    strategy = "context-full";
+  };
+
+  profiles.work = {
+    commandName = "ompw";
+    configDir = ".omp-work";
+    env.ANTHROPIC_API_KEY = "...";
+  };
+};
+```
+
+**Note:** omp's `agent.db` (OAuth tokens set via `/login`) is not Nix-managed. Run `/login` once per profile after initial setup.
+
+## LSP Support (OpenCode)
+
+Bash, Python, Nix, Terraform, Go, YAML, JSON language servers — all configured from Nix packages:
+
+```nix
+programs.ai-tools.tools.opencode.lsp = {
+  bashls.enable = true;
+  pyright.enable = true;
+  nixd.enable = true;
+  terraformls.enable = false;
+  gopls.enable = true;
+  yamlls.enable = true;
+  jsonls.enable = true;
+};
+```
+
+Wire `nixd` to your NixOS config for option completions:
 
 ```nix
 programs.ai-tools.nixos = {
   flakePath = "/home/user/nix-config";
   configurationName = "workstation";
 };
-programs.ai-tools.mcp.servers.nixos.enable = true;
 ```
 
-MCP server definitions can be overridden without editing this repo:
+## Dev Shell Integration
 
-```nix
-programs.ai-tools.mcp = {
-  servers = {
-    context7.enable = true;
-    deepwiki.enable = true;
-    filesystem.enable = true;
-  };
-
-  serverOverrides.deepwiki = {
-    url = "https://mcp.deepwiki.com/mcp";
-  };
-
-  extraServers.local-tool = {
-    command = "/path/to/local-mcp";
-    args = [ "--stdio" ];
-  };
-};
-```
-
-`serverOverrides.<name>` replaces the generated definition for a built-in MCP
-server. Use it for full local replacements or for remote URL changes:
-
-```nix
-programs.ai-tools.mcp = {
-  servers.qmd.enable = true;
-
-  serverOverrides.qmd = {
-    command = "/path/to/qmd-mcp";
-    args = [ "--stdio" ];
-  };
-};
-```
-
-Tool-specific options can also pass through upstream Home Manager options. Use
-`settings` / `extraSettings` for raw config values not covered by dedicated
-options, and `program` for upstream Home Manager tool options not modelled by
-`programs.ai-tools`:
-
-```nix
-programs.ai-tools.tools = {
-  claudeCode = {
-    model = "claude-sonnet-4-6";
-    program.outputStyles.concise = ./claude-output-styles/concise.md;
-  };
-
-  codex = {
-    settings.model = "gpt-5.4";
-    program.skills.local-review = ./skills/local-review;
-  };
-
-  opencode = {
-    model = "claude-sonnet-4-6";
-    theme = "catppuccin";
-    smallModel = "openrouter/openai/gpt-5-nano";
-    disabledProviders = [ "github-copilot" ];
-    extraSettings.mcp = {
-      # Final OpenCode settings override, if you need to replace generated MCPs.
-    };
-    program.web.enable = true;
-  };
-};
-```
-
-OpenCode DCP and RTK are configurable from the module:
-
-```nix
-programs.ai-tools.tools.opencode = {
-  dcp = {
-    enable = true;
-    plugin = "@tarquinen/opencode-dcp@latest";
-    settings.compress.minContextLimit = 60000;
-    extraSettings.strategies.purgeErrors.turns = 2;
-  };
-
-  rtk = {
-    # enable = true by default — RTK binary sourced automatically via llm-agents
-    excludeCommands = [ "nix flake metadata" ];
-    tee = {
-      enable = true;
-      mode = "failures";  # "failures" | "all"
-    };
-    telemetry.enable = false;
-  };
-
-  lsp = {
-    gopls.enable = false;
-    pyright.enable = false;
-    terraformls.enable = false;
-    bashls.enable = true;   # default; listed here for clarity
-  };
-};
-```
-
-For secret-backed MCPs, prefer keeping secrets outside this flake and passing a
-runtime file path from your own Home Manager/NixOS configuration:
-
-```nix
-programs.ai-tools.mcp = {
-  servers.openrouterSearch = {
-    enable = true;
-    apiKeyFile = "/run/secrets/openrouter-api-key";
-  };
-};
-```
-
-For local dev shells, you can also rely on an inherited environment variable.
-Enable the server without setting a key in Nix, and export the variable before
-starting the shell:
+### Scaffolding
 
 ```bash
-read -rs OPENROUTER_API_KEY
-export OPENROUTER_API_KEY
-nix develop .
+nix flake init -t github:zolszabo/ai-tools#local-dev
+nix develop
 ```
 
-If you want the dev shell to forward the current variable explicitly, add a
-devshell env entry in the consuming flake:
+The dev shell creates a project-local AI home under `.ai-tools/home/` — no system changes needed.
+
+### flake-parts
 
 ```nix
-ai-tools.lib.mkAiToolsDevShell {
-  inherit pkgs;
-
-  aiTools.mcp.servers.openrouterSearch.enable = true;
-
-  extraEnv = [
-    {
-      name = "OPENROUTER_API_KEY";
-      eval = "$OPENROUTER_API_KEY";
-    }
-  ];
+{
+  imports = [ ai-tools.flakeModules.default ];
+  perSystem = { ... }: {
+    ai-tools.devshells.default = {
+      aiTools = {
+        mcp.servers.git.enable = true;
+        tools.opencode.enable = true;
+      };
+      extraPackages = [ pkgs.ripgrep ];
+    };
+  };
 }
 ```
 
-A literal key is supported for throwaway/local cases, but avoid it for real
-secrets because it can be copied into the Nix store and generated config files:
+### Plain flake
 
 ```nix
-programs.ai-tools.mcp.servers.openrouterSearch = {
-  enable = true;
-  apiKey = "<openrouter-api-key>";
+devShells.${system}.default = ai-tools.lib.mkAiToolsDevShell {
+  inherit pkgs;
+  aiTools = {
+    mcp.servers.git.enable = true;
+    tools.opencode.enable = true;
+  };
+  extraPackages = [ pkgs.ripgrep ];
 };
 ```
 
-For fully custom environment handling, replace or extend the server definition:
+## NixOS Module
+
+Wrap the HM module for system-wide use:
 
 ```nix
-programs.ai-tools.mcp.servers.openrouterSearch = {
-  enable = true;
-  env.OPENROUTER_API_KEY = "<openrouter-api-key>";
-};
+{
+  imports = [ ai-tools.nixosModules.default ];
+  home-manager.users.alice.programs.ai-tools = {
+    enable = true;
+    tools.opencode.enable = true;
+  };
+}
 ```
 
-`extraServers` are always added when `programs.ai-tools.enable = true`; built-in servers are controlled by their individual `servers.<name>.enable` toggles.
+## Flake Outputs
 
-## Notes
+| Output | Description |
+|--------|-------------|
+| `homeManagerModules.default` | Core HM module |
+| `nixosModules.default` | NixOS wrapper |
+| `flakeModules.default` | flake-parts devshell module |
+| `packages.<system>.default` | All-in-one bundle |
+| `packages.<system>.claude-code` | Claude Code binary |
+| `packages.<system>.codex` | Codex binary |
+| `packages.<system>.opencode` | OpenCode binary |
+| `packages.<system>.omp` | omp (oh-my-pi) binary |
+| `packages.<system>.mcp` | MCP runtime bundle |
+| `lib.mkAiToolsDevShell` | Dev shell builder |
+| `templates.local-dev` | Quick-start template |
 
-- The module is self-contained and does not require `extraSpecialArgs`.
-- `profileName` is used to partition MCP memory files under `mcp.memoryBaseDir`.
-- Claude Code and OpenCode reuse the shared prompts, agents, and skills from `ai-tools/`.
-- Codex reuses Home Manager's Codex module for config and skills, with bundled prompts still placed under `.codex/prompts/`.
-- OpenCode writes optional DCP and RTK support files under each profile's config directory. The default profile also keeps the legacy `.config/rtk/config.toml` path for compatibility.
+## Binary Caches
 
-## Binary cache
-
-Consumers can use the public Cachix cache declared in `nixConfig` automatically
-when they trust this flake's configuration:
-
-```text
-substituter: https://ai-tools.cachix.org
-public key: ai-tools.cachix.org-1:4hlOyu6MVh7DhTl3dG4u1zlyhD834yElTL8bnPu4z2M=
+```
+https://cache.numtide.com
+https://ai-tools.cachix.org
 ```
 
-For non-interactive commands, pass:
-
-```bash
-nix develop github:your-org/ai-tools --accept-flake-config
-```
-
-Or add the cache to your own Nix configuration:
+Consumers get cache hits automatically when trusting this flake's config. Or add manually:
 
 ```nix
 nix.settings = {
   substituters = [ "https://ai-tools.cachix.org" ];
-  trusted-public-keys = [
-    "ai-tools.cachix.org-1:4hlOyu6MVh7DhTl3dG4u1zlyhD834yElTL8bnPu4z2M="
-  ];
+  trusted-public-keys = [ "ai-tools.cachix.org-1:4hlOyu6MVh7DhTl3dG4u1zlyhD834yElTL8bnPu4z2M=" ];
 };
 ```
 
-To allow GitHub Actions to push new build results, set this repository secret:
-
-- `CACHIX_AUTH_TOKEN`
-
 ## Releasing
 
-Releases are fully automated via `scripts/release.sh` and GitHub Actions.
-
-### Creating a release
-
 ```bash
-# Ensure you are on main and the tree is clean.
 ./scripts/release.sh 0.2.0
 ```
 
-The script:
-1. Validates the version argument (semver, no leading `v`).
-2. Checks the working tree is clean and the branch is `main`.
-3. Bumps `version = "..."` in `flake.nix`.
-4. Commits with `chore: bump flake version to v0.2.0`.
-5. Creates an annotated tag `v0.2.0`.
-6. Pushes the commit and the tag to origin.
+Bumps version in `flake.nix`, commits, tags, and pushes. GitHub Actions builds and publishes to Cachix, creates GitHub release with changelog from `git-cliff`.
 
-### What happens next (GitHub Actions)
-
-Pushing the tag triggers `.github/workflows/release.yml`:
-
-1. **build-and-cache** — builds all outputs and pushes them to Cachix. Pins the
-   tag as a versioned pin (`ai-tools-v0.2.0`) so consumers can reference a
-   known-good store path.
-2. **github-release** — generates release notes from conventional commits via
-   `git-cliff` (`cliff.toml`) and creates the GitHub release with those notes.
-
-### Changelog
-
-`CHANGELOG.md` is a manually maintained human summary. Detailed per-commit
-release notes are generated by `git-cliff` and published automatically on each
-GitHub release. To preview locally:
-
-```bash
-nix shell nixpkgs#git-cliff -- git cliff --latest
-```
-
-### Flake input updates
-
-A weekly scheduled workflow (`.github/workflows/update-flake-inputs.yml`) runs
-`nix flake update` and opens a pull request with the lock file changes.
-`dependabot.yml` keeps the GitHub Actions themselves up to date.
+Flake inputs update weekly via automated PRs from `.github/workflows/update-flake-inputs.yml`.

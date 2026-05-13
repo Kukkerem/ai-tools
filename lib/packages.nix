@@ -13,6 +13,22 @@ let
     lib.optionals pkgs.stdenv.isLinux [ pkgs.chromium ]
     ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.google-chrome ];
 
+  cavemanSkillRuntimePackages = [
+    (pkgs.python3.withPackages (ps: [
+      ps.anthropic
+      ps.tiktoken
+    ]))
+  ];
+
+  superpowersSkillRuntimePackages = [
+    pkgs.nodejs
+    pkgs.graphviz
+    pkgs.which
+    pkgs.findutils
+  ];
+
+  agentBrowserSkillRuntimePackages = browserPackages;
+
   mkBundle =
     name: paths:
     pkgs.buildEnv {
@@ -48,6 +64,8 @@ let
 
   opencodeHelperPackages = [ llmAgents.ccusage-opencode ];
 
+  ompHelperPackages = [ ];
+
   opencodeRuntimePackages = [
     pkgs.bash-language-server
     pkgs.nixfmt
@@ -81,6 +99,7 @@ let
     claudeCode = llmAgents.claude-code;
     codex = llmAgents.codex;
     opencode = llmAgents.opencode;
+    omp = llmAgents.omp;
   };
 
   defaultPackages = lib.unique (
@@ -96,20 +115,25 @@ let
       toolPackages.claudeCode
       toolPackages.codex
       toolPackages.opencode
+      toolPackages.omp
     ]
   );
 in
 {
   inherit
+    agentBrowserSkillRuntimePackages
+    cavemanSkillRuntimePackages
     claudeCodeHelperPackages
     codexHelperPackages
     defaultPackages
     mcpRuntimePackages
+    ompHelperPackages
     opencodeHelperPackages
     opencodeRuntimePackages
     serenaRustPackages
     serenaSupportPackages
     sharedAgentPackages
+    superpowersSkillRuntimePackages
     toolPackages
     ;
 

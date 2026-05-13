@@ -15,6 +15,10 @@ let
   aiCommands = import ./commands.nix { inherit inputs lib; };
   aiAgents = import ./agents.nix { inherit lib; };
   aiSkills = import ./skills.nix { inherit inputs lib pkgs; };
+  aiSkillFiles = import ./skill-files.nix {
+    inherit inputs lib;
+    skills = aiSkills;
+  };
 
   capitalize =
     word:
@@ -159,12 +163,14 @@ in
     commands = aiCommands;
     agents = aiAgents;
     skills = aiSkills;
+    skillFiles = aiSkillFiles;
   };
 
   geminiCli = {
     commands = convertCommandsToGemini aiCommands;
     agents = convertAgentsToGemini aiAgents;
     skills = aiSkills;
+    skillFiles = aiSkillFiles;
   };
 
   # Codex uses a single instructions.md + skills path references
@@ -173,7 +179,18 @@ in
     agentsMarkdown = renderAgentsMarkdown aiAgents;
     prompts = aiCommands;
     skills = aiSkills;
+    skillFiles = aiSkillFiles;
     agentSkills = codexAgentSkills;
+  };
+
+  # omp discovers skills/agents/commands via filesystem under
+  # .omp/{skills,agents,commands}/, with the same Markdown structure
+  # as claude-code. No YAML conversion needed.
+  omp = {
+    commands = aiCommands;
+    agents = aiAgents;
+    skills = aiSkills;
+    skillFiles = aiSkillFiles;
   };
 
   mergeCommands = existingCommands: newCommands: existingCommands // newCommands;

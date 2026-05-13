@@ -35,7 +35,7 @@
           opencode.enable = true;
         };
         mcp.servers = {
-          sequentialThinking.enable = true;
+          sequential-thinking.enable = true;
           git.enable = true;
           time.enable = true;
           memory.enable = true;

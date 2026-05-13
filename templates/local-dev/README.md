@@ -81,10 +81,10 @@ programs.ai-tools.tools.opencode = {
 
 ### Add extra secrets or environment variables
 
-Use `programs.ai-tools.mcp.servers.openrouterSearch` to wire an API key:
+Use `programs.ai-tools.mcp.servers.openrouter-search` to wire an API key:
 
 ```nix
-programs.ai-tools.mcp.servers.openrouterSearch = {
+programs.ai-tools.mcp.servers.openrouter-search = {
   enable = true;
   apiKeyFile = "/run/secrets/openrouter-api-key"; # managed by sops-nix, agenix, etc.
 };

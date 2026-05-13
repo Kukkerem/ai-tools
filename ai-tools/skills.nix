@@ -12,4 +12,6 @@ lib.foldl' lib.recursiveUpdate { } [
   (import ./skills/notebooklm/index.nix { })
   (import ./skills/rtk/index.nix { })
   (import ./skills/karpathy-guidelines/index.nix { })
+  (import ./skills/mattpocock/index.nix { inherit inputs; })
+  (import ./skills/superpowers/index.nix { inherit inputs; })
 ]

@@ -229,6 +229,7 @@ in
   inherit
     basicMemoryPackage
     mcpServerFetchFixed
+    mkServers
     notebooklmPackage
     ;
 
