@@ -187,7 +187,7 @@ let
       name = commandName;
       runtimeInputs = [ package ] ++ (profile.extraRuntimePackages or [ ]);
       text = ''
-        export PI_CONFIG_DIR="$HOME"/${escapeShellArg configDir}
+        export PI_CONFIG_DIR=${escapeShellArg configDir}
       ''
       + lib.concatMapStrings (k: ''
         # shellcheck disable=SC2016

@@ -221,7 +221,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test "$(yq '.providers.local.models[0]' $omp_default_models)" = "local/test"
     jq -e '.mcpServers.memory.env.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/custom-omp/memory.json"' "$omp_default_mcp" >/dev/null
 
-    grep -F 'export PI_CONFIG_DIR="$HOME"/.omp' "$omp_wrapper" >/dev/null
+    grep -F 'export PI_CONFIG_DIR=.omp' "$omp_wrapper" >/dev/null
     grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null
     grep -F 'export OPENROUTER_API_KEY' "$omp_wrapper" >/dev/null
 
@@ -241,7 +241,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test "$(yq '.modelRoles.default' $omp_work_config)" = "ollama-cloud/glm-5.1"
     test "$(yq '.modelRoles == null' $omp_work_models)" = "true"
 
-    grep -F 'export PI_CONFIG_DIR="$HOME"/.omp-work' "$omp_work_wrapper" >/dev/null
+    grep -F 'export PI_CONFIG_DIR=.omp-work' "$omp_work_wrapper" >/dev/null
     grep -F "export ANTHROPIC_API_KEY='test key with spaces'" "$omp_work_wrapper" >/dev/null
     grep -F 'export SHELL_TEST=' "$omp_work_wrapper" >/dev/null
     grep -F 'value with "quotes" and $dollar' "$omp_work_wrapper" >/dev/null
