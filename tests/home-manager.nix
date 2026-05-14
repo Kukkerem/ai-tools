@@ -124,7 +124,7 @@ let
       ];
     }).activationPackage;
 
-  disabledSkillsGeneration =
+  filteredCommandsAgentsGeneration =
     (inputs.home-manager.lib.homeManagerConfiguration {
       inherit pkgs;
       modules = [
@@ -137,7 +137,11 @@ let
           programs.ai-tools = {
             enable = true;
             tools.omp.enable = true;
+            commands.git.enable = false;
+            agents.general.enable = false;
             skills.mattpocock.enable = false;
+            disabledCommands = [ "nix-refactor" ];
+            disabledAgents = [ "nix-builder" ];
           };
         }
       ];
@@ -270,8 +274,20 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     jq -e '.mcpServers.memory.env.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/omp-work/memory.json"' "$omp_work_mcp" >/dev/null
     jq -e '.mcpServers.context7 != null' "$omp_work_mcp" >/dev/null
 
-    # Matt Pocock repo skills can be disabled as a category.
-    test ! -e ${disabledSkillsGeneration}/home-files/.omp/agent/skills/tdd/SKILL.md
+    # Skill, command, and agent categories can be disabled independently.
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/skills/tdd/SKILL.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/commands/review.md
+    test -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/commands/nix-check.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/commands/nix-refactor.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/code-reviewer.md
+    test -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/nix-expert.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/nix-builder.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/review.md
+    test -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/nix-check.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/nix-refactor.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/code-reviewer/SKILL.md
+    test -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-expert/SKILL.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-builder/SKILL.md
 
     touch $out
   ''

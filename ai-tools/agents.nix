@@ -1,7 +1,6 @@
 { lib, ... }:
 
-lib.foldl' lib.recursiveUpdate { } [
-  (import ./agents/nix/index.nix { inherit lib; })
-  (import ./agents/project/index.nix { inherit lib; })
-  (import ./agents/general/index.nix { inherit lib; })
-]
+let
+  agentGroups = import ./agent-groups.nix { inherit lib; };
+in
+lib.foldl' lib.recursiveUpdate { } (builtins.attrValues agentGroups)

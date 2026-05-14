@@ -216,6 +216,7 @@ let
       /\b:(){ :|:& };:/,
       /\bwget\s+.*\|\s*(ba)?sh\b/i,
       /\bcurl\s+.*\|\s*(ba)?sh\b/i,
+      /\bgit\s+push\b/,
     ]
 
     var BLOCKED_COMMANDS: string[] = [
