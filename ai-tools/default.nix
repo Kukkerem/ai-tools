@@ -12,6 +12,8 @@ let
     nameValuePair
     ;
 
+  commandGroups = import ./command-groups.nix { inherit inputs lib; };
+  agentGroups = import ./agent-groups.nix { inherit lib; };
   aiCommands = import ./commands.nix { inherit inputs lib; };
   aiAgents = import ./agents.nix { inherit lib; };
   aiSkills = import ./skills.nix { inherit inputs lib pkgs; };
@@ -159,6 +161,8 @@ let
 
 in
 {
+  inherit commandGroups agentGroups;
+
   claudeCode = {
     commands = aiCommands;
     agents = aiAgents;

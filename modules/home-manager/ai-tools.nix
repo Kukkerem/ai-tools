@@ -13,6 +13,8 @@ let
     concatLists
     elem
     filterAttrs
+    mapAttrs
+    mapAttrsToList
     mkEnableOption
     mkDefault
     mkIf
@@ -40,6 +42,13 @@ let
       inherit default;
     };
   };
+
+  mkCollectionEnableOption =
+    kind: groupName: members:
+    mkEnableOption "${groupName} ${kind} (${lib.concatStringsSep ", " (attrNames members)})"
+    // {
+      default = true;
+    };
 
   mkProfileServerOption = description: {
     enable = mkOption {
@@ -135,6 +144,37 @@ let
     "cavecrew"
   ];
 
+  commandGroups = aiTools.commandGroups;
+  agentGroups = aiTools.agentGroups;
+
+  allCommandNames = attrNames aiTools.claudeCode.commands;
+  allAgentNames = attrNames aiTools.claudeCode.agents;
+
+  enabledCommandNames = lib.subtractLists cfg.disabledCommands (
+    unique (
+      concatLists (
+        mapAttrsToList (
+          groupName: commands: optionals cfg.commands.${groupName}.enable (attrNames commands)
+        ) commandGroups
+      )
+    )
+  );
+
+  enabledAgentNames = lib.subtractLists cfg.disabledAgents (
+    unique (
+      concatLists (
+        mapAttrsToList (
+          groupName: agents: optionals cfg.agents.${groupName}.enable (attrNames agents)
+        ) agentGroups
+      )
+    )
+  );
+
+  unknownDisabledCommands = lib.subtractLists allCommandNames cfg.disabledCommands;
+  unknownDisabledAgents = lib.subtractLists allAgentNames cfg.disabledAgents;
+
+  filterCommands = commands: filterAttrs (name: _: elem name enabledCommandNames) commands;
+  filterAgents = agents: filterAttrs (name: _: elem name enabledAgentNames) agents;
   mattpocockSkillNames = [
     "diagnose"
     "grill-with-docs"
@@ -411,20 +451,20 @@ let
   codexSkills = filterSkills aiTools.codex.skills;
 
   codexHomeFiles =
-    lib.mapAttrs' (
-      name: prompt: lib.nameValuePair ".codex/prompts/${name}.md" { text = prompt; }
-    ) aiTools.codex.prompts
+    lib.mapAttrs' (name: prompt: lib.nameValuePair ".codex/prompts/${name}.md" { text = prompt; }) (
+      filterCommands aiTools.codex.prompts
+    )
     // lib.mapAttrs' (
       skillName: skill: lib.nameValuePair ".agents/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
     ) (filterSkills aiTools.codex.skills)
     // mkSkillExtraHomeFiles ".agents/skills" aiTools.codex.skillFiles
     // lib.mapAttrs' (
       name: skill: lib.nameValuePair ".agents/skills/${name}/SKILL.md" { text = skill.skillMd; }
-    ) aiTools.codex.agentSkills
+    ) (filterAgents aiTools.codex.agentSkills)
     // lib.mapAttrs' (
       name: skill:
       lib.nameValuePair ".agents/skills/${name}/agents/openai.yaml" { text = skill.openaiYaml; }
-    ) aiTools.codex.agentSkills;
+    ) (filterAgents aiTools.codex.agentSkills);
 
   nixdInitialization = {
     formatting.command = [ (lib.getExe pkgs.nixfmt) ];
@@ -535,11 +575,11 @@ let
       }
       // lib.mapAttrs' (
         agentName: agent: lib.nameValuePair "${profile.configDir}/agent/${agentName}.md" { text = agent; }
-      ) aiTools.claudeCode.agents
+      ) (filterAgents aiTools.claudeCode.agents)
       // lib.mapAttrs' (
         commandName: command:
         lib.nameValuePair "${profile.configDir}/command/${commandName}.md" { text = command; }
-      ) aiTools.claudeCode.commands
+      ) (filterCommands aiTools.claudeCode.commands)
       // lib.mapAttrs' (
         skillName: skill:
         lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
@@ -957,11 +997,11 @@ let
     // lib.mapAttrs' (relPath: file: lib.nameValuePair "${dir}/${relPath}" file) hookFiles
     // lib.mapAttrs' (
       agentName: agent: lib.nameValuePair "${dir}/agent/agents/${agentName}.md" { text = agent; }
-    ) aiTools.omp.agents
+    ) (filterAgents aiTools.omp.agents)
     // lib.mapAttrs' (
       commandName: command:
       lib.nameValuePair "${dir}/agent/commands/${commandName}.md" { text = command; }
-    ) aiTools.omp.commands
+    ) (filterCommands aiTools.omp.commands)
     // lib.mapAttrs' (
       skillName: skill:
       lib.nameValuePair "${dir}/agent/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
@@ -2081,6 +2121,32 @@ in
       };
     };
 
+    disabledCommands = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Command names to exclude after category filtering. Names must match a
+        known command from the discovered command groups.
+      '';
+    };
+
+    disabledAgents = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Agent names to exclude after category filtering. Names must match a
+        known agent from the discovered agent groups.
+      '';
+    };
+
+    commands = mapAttrs (groupName: members: {
+      enable = mkCollectionEnableOption "commands" groupName members;
+    }) commandGroups;
+
+    agents = mapAttrs (groupName: members: {
+      enable = mkCollectionEnableOption "agents" groupName members;
+    }) agentGroups;
+
     skills = {
       caveman.enable =
         mkEnableOption "caveman skills (caveman, caveman-commit, caveman-review, etc.)"
@@ -2148,6 +2214,16 @@ in
           message = "programs.ai-tools.tools.omp env/envFiles and profiles.* env/envFiles keys must be valid shell environment variable names. Invalid names: ${lib.concatStringsSep ", " invalidOmpEnvNames}";
         }
 
+        {
+          assertion = unknownDisabledCommands == [ ];
+          message = "programs.ai-tools.disabledCommands contains unknown command names: ${lib.concatStringsSep ", " unknownDisabledCommands}";
+        }
+
+        {
+          assertion = unknownDisabledAgents == [ ];
+          message = "programs.ai-tools.disabledAgents contains unknown agent names: ${lib.concatStringsSep ", " unknownDisabledAgents}";
+        }
+
       ];
     }
 
@@ -2182,8 +2258,8 @@ in
             mkToolMcpServers "claudecode" cfg.tools.claudeCode.mcp.inheritGlobal mcp.forClaudeCode
           );
           settings = mkDefault claudeCodeSettings;
-          agents = aiTools.claudeCode.agents;
-          commands = aiTools.claudeCode.commands;
+          agents = filterAgents aiTools.claudeCode.agents;
+          commands = filterCommands aiTools.claudeCode.commands;
           skills = filterSkills aiTools.claudeCode.skills;
           context = mkDefault instructions;
         }
@@ -2221,10 +2297,8 @@ in
           package = mkDefault defaultOpencodePackage;
           context = mkDefault opencodeRules;
           settings = mkDefault opencodeSettings;
-          inherit (aiTools.claudeCode)
-            agents
-            commands
-            ;
+          agents = filterAgents aiTools.claudeCode.agents;
+          commands = filterCommands aiTools.claudeCode.commands;
           skills = filterSkills aiTools.claudeCode.skills;
         }
         cfg.tools.opencode.program
@@ -2290,6 +2364,11 @@ in
 
     (mkIf (cfg.tools.opencode.enable && opencodeDcpEnabled) {
       programs.ai-tools.skills.dcp.enable = mkDefault true;
+    })
+
+    # Auto-enable caveman commands when caveman skills are enabled
+    (mkIf cfg.skills.caveman.enable {
+      programs.ai-tools.commands.caveman.enable = mkDefault true;
     })
   ]);
 }

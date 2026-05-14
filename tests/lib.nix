@@ -8,7 +8,19 @@ let
   mcp = import ../lib/mcp.nix { inherit inputs lib pkgs; };
   opencode = import ../lib/opencode.nix { inherit inputs lib pkgs; };
 
+  aiTools = import ../ai-tools { inherit inputs lib pkgs; };
+
   failures = lib.debug.runTests {
+    testCommandGroupsFlattenToClaudeCommands = {
+      expr = lib.foldl' lib.recursiveUpdate { } (builtins.attrValues aiTools.commandGroups);
+      expected = aiTools.claudeCode.commands;
+    };
+
+    testAgentGroupsFlattenToClaudeAgents = {
+      expr = lib.foldl' lib.recursiveUpdate { } (builtins.attrValues aiTools.agentGroups);
+      expected = aiTools.claudeCode.agents;
+    };
+
     testRtkConfigRendersToml = {
       expr = opencode.mkRtkConfig {
         excludeCommands = [
