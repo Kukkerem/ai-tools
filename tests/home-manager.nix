@@ -141,7 +141,7 @@ let
             agents.general.enable = false;
             skills.mattpocock.enable = false;
             disabledCommands = [ "nix-refactor" ];
-            disabledAgents = [ "builder" ];
+            disabledAgents = [ "nix-builder" ];
           };
         }
       ];
@@ -281,13 +281,13 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/commands/nix-refactor.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/code-reviewer.md
     test -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/nix-expert.md
-    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/builder.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/agents/nix-builder.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/review.md
     test -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/nix-check.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.codex/prompts/nix-refactor.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/code-reviewer/SKILL.md
     test -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-expert/SKILL.md
-    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/builder/SKILL.md
+    test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-builder/SKILL.md
 
     touch $out
   ''

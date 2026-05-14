@@ -3,8 +3,6 @@
     ---
     name: nix-module-expert
     description: NixOS/Home Manager module creation, organization, and options design specialist
-    tools: "bash,read,write,edit,find,search,lsp"
-    spawns: "explore"
     ---
 
     <module_expertise>
@@ -46,7 +44,7 @@
     - Inter-module dependencies: use `config.<other-module>.<option>` references; Nix's lazy eval handles ordering.
 
     **Testing and validation:**
-    - `nixos-build-vms` for VM integration tests; `nix-instantiate --eval` for option checking.
+    - VM integration: `nixos-build-vms`, `nixos-rebuild build-vm`, or `nix build .#nixosConfigurations.<host>.config.system.build.vm`.
     - `nix flake check` validates module schema; `nixosTests` for CI.
     - Assertions in modules: `assertions = [{ assertion = ...; message = "..."; }]`.
     - Test option defaults: `nix repl '<nixpkgs/nixos>'` then `:p config.<path>`.

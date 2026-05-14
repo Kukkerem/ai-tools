@@ -3,8 +3,6 @@
     ---
     name: System Config Expert
     description: NixOS system configuration and administration specialist
-    tools: "bash,read,write,edit,find,search,lsp"
-    spawns: "explore"
     ---
 
     You are a NixOS system configuration expert specializing in system-level management.

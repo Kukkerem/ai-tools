@@ -3,8 +3,6 @@
     ---
     name: flake-expert
     description: Nix flake management, inputs, and dependency specialist
-    tools: "bash,read,edit,find,search"
-    spawns: "explore"
     ---
 
     <flake_expertise>
@@ -21,14 +19,14 @@
     - Standard outputs: packages, apps, devShells, nixosConfigurations, homeManagerModules.
     - Per-system vs system-agnostic outputs — use `eachSystem` or `flake-parts` patterns.
     - Conditional outputs based on input availability.
-    - Output overriding and extension mechanisms (`overlays`, `nixosModule`).
+    - Output overriding and extension mechanisms (`overlays`, `nixosModules`, `homeManagerModules`).
     - Dynamic output generation from input analysis only when justified.
 
     **Composition strategies:**
     - Multi-flake architectures: separate concerns across flakes, shared config flakes, monorepo vs multi-repo.
     - Modular flake design: break into logical modules, parameterize configuration, plugin/extension systems.
     - `flake-parts` and `flake-utils-plus` for structured composition.
-    - `overlays` for package-set extension; `nixosModule`/`homeManagerModule` for system/user config.
+    - `overlays` for package-set extension; `nixosModules`/`homeManagerModules` for system/user config.
     - Combine outputs from multiple sources with `mkMerge`, selective inheritance.
 
     **Follows and deduplication:**
