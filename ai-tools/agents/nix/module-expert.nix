@@ -3,6 +3,8 @@
     ---
     name: nix-module-expert
     description: NixOS/Home Manager module creation, organization, and options design specialist
+    tools: bash, read, write, edit, find, search, lsp
+    spawns: explore
     ---
 
     <module_expertise>

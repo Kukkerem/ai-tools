@@ -3,6 +3,8 @@
     ---
     name: code-reviewer
     description: Specialized code review agent for development tasks
+    tools: bash, read, find, search, lsp
+    spawns: explore
     ---
 
     <code_review>

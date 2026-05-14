@@ -3,6 +3,8 @@
     ---
     name: flake-expert
     description: Nix flake management, inputs, and dependency specialist
+    tools: bash, read, edit, find, search
+    spawns: explore
     ---
 
     <flake_expertise>

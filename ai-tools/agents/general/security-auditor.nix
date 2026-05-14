@@ -3,7 +3,10 @@
     ---
     name: security-auditor
     description: Security analysis and vulnerability assessment specialist
+    tools: bash, read, find, search
+    spawns: explore
     ---
+
     <security_assessment>
     Conduct systematic security assessments across four areas:
 
