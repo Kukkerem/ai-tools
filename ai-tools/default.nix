@@ -193,8 +193,16 @@ let
     let
       lines = lib.filter (l: l != "") (lib.splitString "\n" fm);
       # Keys whose nested children should be collected as comma-separated values
-      nestingKeys = [ "tools" "permission" ];
-      parse = { attrs, currentNest, acc }:
+      nestingKeys = [
+        "tools"
+        "permission"
+      ];
+      parse =
+        {
+          attrs,
+          currentNest,
+          acc,
+        }:
         line:
         let
           m = builtins.match "([^:]*):(.*)" line;
@@ -210,24 +218,34 @@ let
         in
         if isNested && currentNest != "" then
           # Indented line under a nesting key — accumulate the leaf key
-          { inherit attrs currentNest; acc = acc ++ [ key ]; }
+          {
+            inherit attrs currentNest;
+            acc = acc ++ [ key ];
+          }
         else if m != null && builtins.elem key nestingKeys then
           # Start of a nesting key (value may be empty or inline)
-          { attrs = flushedAttrs; currentNest = key; acc = if val != "" then [ val ] else [ ]; }
+          {
+            attrs = flushedAttrs;
+            currentNest = key;
+            acc = if val != "" then [ val ] else [ ];
+          }
         else if m != null then
           # Flat key-value pair
           {
-            attrs = flushedAttrs // { ${key} = val; };
+            attrs = flushedAttrs // {
+              ${key} = val;
+            };
             currentNest = "";
             acc = [ ];
           }
         else
           # Unrecognized line — skip
           { inherit attrs currentNest acc; };
-      result = builtins.foldl'
-        parse
-        { attrs = { }; currentNest = ""; acc = [ ]; }
-        lines;
+      result = builtins.foldl' parse {
+        attrs = { };
+        currentNest = "";
+        acc = [ ];
+      } lines;
       # Fold accumulated nested values into attrs
       finalAttrs =
         if result.currentNest != "" && result.acc != [ ] then
