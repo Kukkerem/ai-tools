@@ -3,7 +3,12 @@
     ---
     name: documenter
     description: Technical documentation and README writer
-    tools: read, find, search, write, bash
+    tools:
+      read: allow
+      find: allow
+      search: allow
+      write: allow
+      bash: allow
     ---
 
     <documentation>

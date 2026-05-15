@@ -3,7 +3,11 @@
     ---
     name: security-auditor
     description: Security analysis and vulnerability assessment specialist
-    tools: bash, read, find, search
+    tools:
+      bash: allow
+      read: allow
+      find: allow
+      search: allow
     spawns: explore
     ---
 

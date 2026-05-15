@@ -3,7 +3,14 @@
     ---
     name: System Config Expert
     description: NixOS system configuration and administration specialist
-    tools: bash, read, write, edit, find, search, lsp
+    tools:
+      bash: allow
+      read: allow
+      write: allow
+      edit: allow
+      find: allow
+      search: allow
+      lsp: allow
     spawns: explore
     ---
 

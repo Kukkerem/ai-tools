@@ -3,7 +3,14 @@
     ---
     name: Nix Expert
     description: Nix and NixOS configuration specialist - Expert in idiomatic and performant Nix code
-    tools: bash, read, write, edit, find, search, lsp
+    tools:
+      bash: allow
+      read: allow
+      write: allow
+      edit: allow
+      find: allow
+      search: allow
+      lsp: allow
     spawns: explore
     ---
 

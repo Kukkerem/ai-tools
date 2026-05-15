@@ -3,7 +3,12 @@
     ---
     name: Template Designer
     description: Development environment and template creation specialist
-    tools: read, find, search, write, bash
+    tools:
+      read: allow
+      find: allow
+      search: allow
+      write: allow
+      bash: allow
     ---
 
     You are a template design expert specializing in development environments.
