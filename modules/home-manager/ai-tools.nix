@@ -574,12 +574,12 @@ let
         "${profile.configDir}/AGENTS.md".text = opencodeRules;
       }
       // lib.mapAttrs' (
-        agentName: agent: lib.nameValuePair "${profile.configDir}/agent/${agentName}.md" { text = agent; }
-      ) (filterAgents aiTools.claudeCode.agents)
+        agentName: agent: lib.nameValuePair "${profile.configDir}/agents/${agentName}.md" { text = agent; }
+      ) (filterAgents aiTools.opencode.agents)
       // lib.mapAttrs' (
         commandName: command:
-        lib.nameValuePair "${profile.configDir}/command/${commandName}.md" { text = command; }
-      ) (filterCommands aiTools.claudeCode.commands)
+        lib.nameValuePair "${profile.configDir}/commands/${commandName}.md" { text = command; }
+      ) (filterCommands aiTools.opencode.commands)
       // lib.mapAttrs' (
         skillName: skill:
         lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
@@ -2297,8 +2297,8 @@ in
           package = mkDefault defaultOpencodePackage;
           context = mkDefault opencodeRules;
           settings = mkDefault opencodeSettings;
-          agents = filterAgents aiTools.claudeCode.agents;
-          commands = filterCommands aiTools.claudeCode.commands;
+          agents = filterAgents aiTools.opencode.agents;
+          commands = filterCommands aiTools.opencode.commands;
           skills = filterSkills aiTools.claudeCode.skills;
         }
         cfg.tools.opencode.program
