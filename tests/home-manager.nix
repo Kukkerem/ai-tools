@@ -297,20 +297,20 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -f "$oc_code_reviewer"
     test -f "$oc_commit_changes"
 
-    # Agent frontmatter must use boolean tool values, not "allow" or comma-separated strings
-    grep -F 'bash: true' "$oc_code_reviewer" >/dev/null
-    grep -F 'grep: true' "$oc_code_reviewer" >/dev/null
-    grep -F 'glob: true' "$oc_code_reviewer" >/dev/null
+    # Agent frontmatter must use permission field with allow values (not boolean tools)
+    grep -F 'bash: allow' "$oc_code_reviewer" >/dev/null
+    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null
+    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null
 
-    # Agent frontmatter must map Claude Code tool names to OpenCode names
-    grep -F 'glob: true' "$oc_code_reviewer" >/dev/null  # find → glob
-    grep -F 'grep: true' "$oc_code_reviewer" >/dev/null  # search → grep
+    # Agent frontmatter must map Claude Code tool names to OpenCode permission names
+    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null  # find → glob
+    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null  # search → grep
 
-    # Agent frontmatter must not contain Claude-Code-only fields
+    # Agent frontmatter must not contain Claude-Code-only fields or deprecated tools field
     ! grep -F 'spawns:' "$oc_code_reviewer" >/dev/null
-    ! grep -F 'find: true' "$oc_code_reviewer" >/dev/null
-    ! grep -F 'search: true' "$oc_code_reviewer" >/dev/null
-
+    ! grep -F 'tools:' "$oc_code_reviewer" >/dev/null
+    ! grep -F 'find: allow' "$oc_code_reviewer" >/dev/null
+    ! grep -F 'search: allow' "$oc_code_reviewer" >/dev/null
     # Command frontmatter must strip allowed-tools (opencode doesn't support it)
     ! grep -F 'allowed-tools:' "$oc_commit_changes" >/dev/null
     # Command frontmatter must keep description

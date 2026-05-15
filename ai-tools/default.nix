@@ -209,9 +209,9 @@ let
       ) lines
     );
 
-  # Convert "bash, read, write" → "  bash: true\n  read: true\n  write: true\n"
-  # with Claude Code → OpenCode tool name mapping.
-  _toolsToYamlMap =
+  # Convert "bash, read, write" → "permission:\n  bash: allow\n  read: allow\n"
+  # with Claude Code → OpenCode permission name mapping.
+  _toolsToPermissionYaml =
     toolsStr:
     let
       # Claude Code tool names → OpenCode permission names
@@ -234,7 +234,7 @@ let
       mappedList = map (tool: toolMap.${tool} or tool) rawList;
       deduped = lib.unique mappedList;
     in
-    lib.concatMapStrings (tool: "  ${tool}: true\n") deduped;
+    lib.concatMapStrings (tool: "  ${tool}: allow\n") deduped;
 
   # Rebuild a frontmatter string from an attrset (discard empty values).
   _rebuildFrontmatter =
@@ -249,16 +249,14 @@ let
     let
       split = _splitFrontmatter agentText;
       fm = _parseFrontmatter split.frontmatter;
-      toolsYaml = _toolsToYamlMap (fm.tools or "");
+      permYaml = _toolsToPermissionYaml (fm.tools or "");
       newFm = _rebuildFrontmatter {
-        name = fm.name or "";
         description = fm.description or "";
         mode = "subagent";
-        tools = if toolsYaml == "" then "" else "\n${toolsYaml}";
+        permission = if permYaml == "" then "" else "\n${permYaml}";
       };
     in
     if split.frontmatter == "" then agentText else "---\n${newFm}\n---\n\n${split.body}";
-
   convertAgentsToOpenCode = agents: mapAttrs convertAgentToOpenCode agents;
 
   # ── Command: Claude Code → OpenCode ──
