@@ -184,30 +184,58 @@ let
       inherit frontmatter body;
     };
 
-  # Parse simple key-value YAML frontmatter (flat keys only).
+  # Parse YAML frontmatter with support for nested maps under specific keys.
+  # Nested lines (indented) under keys like `tools:` are collected as:
+  #   tools: "bash, read, find, search, lsp"  (comma-separated leaf values)
+  # Unrecognized nested structures are dropped.
   _parseFrontmatter =
     fm:
     let
       lines = lib.filter (l: l != "") (lib.splitString "\n" fm);
-    in
-    builtins.listToAttrs (
-      map (
+      # Keys whose nested children should be collected as comma-separated values
+      nestingKeys = [ "tools" "permission" ];
+      parse = { attrs, currentNest, acc }:
         line:
         let
           m = builtins.match "([^:]*):(.*)" line;
+          key = if m == null then null else lib.trim (builtins.elemAt m 0);
+          val = if m == null then "" else lib.trim (builtins.elemAt m 1);
+          isNested = line != "" && builtins.substring 0 1 line == " ";
+          # Flush accumulated nested values before transitioning state
+          flushedAttrs =
+            if currentNest != "" && acc != [ ] then
+              attrs // { ${currentNest} = lib.concatStringsSep ", " acc; }
+            else
+              attrs;
         in
-        if m == null then
+        if isNested && currentNest != "" then
+          # Indented line under a nesting key — accumulate the leaf key
+          { inherit attrs currentNest; acc = acc ++ [ key ]; }
+        else if m != null && builtins.elem key nestingKeys then
+          # Start of a nesting key (value may be empty or inline)
+          { attrs = flushedAttrs; currentNest = key; acc = if val != "" then [ val ] else [ ]; }
+        else if m != null then
+          # Flat key-value pair
           {
-            name = "";
-            value = "";
+            attrs = flushedAttrs // { ${key} = val; };
+            currentNest = "";
+            acc = [ ];
           }
         else
-          {
-            name = lib.trim (builtins.elemAt m 0);
-            value = lib.trim (builtins.elemAt m 1);
-          }
-      ) lines
-    );
+          # Unrecognized line — skip
+          { inherit attrs currentNest acc; };
+      result = builtins.foldl'
+        parse
+        { attrs = { }; currentNest = ""; acc = [ ]; }
+        lines;
+      # Fold accumulated nested values into attrs
+      finalAttrs =
+        if result.currentNest != "" && result.acc != [ ] then
+          result.attrs // { ${result.currentNest} = lib.concatStringsSep ", " result.acc; }
+        else
+          result.attrs;
+    in
+    lib.filterAttrs (k: _: k != "") finalAttrs;
 
   # Convert "bash, read, write" → "permission:\n  bash: allow\n  read: allow\n"
   # with Claude Code → OpenCode permission name mapping.
