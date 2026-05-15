@@ -159,6 +159,133 @@ let
 
   codexAgentSkills = mapAttrs mkSkillMetadata aiAgents;
 
+  # ═══════════════════════════════════════════════════════════════
+  # Per-tool metadata transformations
+  #
+  # Source .nix files store metadata in Claude Code frontmatter format
+  # (comma-separated tools, allowed-tools, spawns, etc). Each target
+  # CLI tool needs its own frontmatter dialect.
+  # ═══════════════════════════════════════════════════════════════
+
+  # Split a string by "---" markers into frontmatter and body.
+  _splitFrontmatter =
+    text:
+    let
+      parts = lib.splitString "---" text;
+      hasFrontmatter = lib.length parts >= 3;
+      frontmatter = if hasFrontmatter then lib.elemAt parts 1 else "";
+      body =
+        if hasFrontmatter then
+          lib.trim (builtins.concatStringsSep "---" (lib.drop 2 parts))
+        else
+          lib.trim text;
+    in
+    {
+      inherit frontmatter body;
+    };
+
+  # Parse simple key-value YAML frontmatter (flat keys only).
+  _parseFrontmatter =
+    fm:
+    let
+      lines = lib.filter (l: l != "") (lib.splitString "\n" fm);
+    in
+    builtins.listToAttrs (
+      map (
+        line:
+        let
+          m = builtins.match "([^:]*):(.*)" line;
+        in
+        if m == null then
+          {
+            name = "";
+            value = "";
+          }
+        else
+          {
+            name = lib.trim (builtins.elemAt m 0);
+            value = lib.trim (builtins.elemAt m 1);
+          }
+      ) lines
+    );
+
+  # Convert "bash, read, write" → "permission:\n  bash: allow\n  read: allow\n"
+  # with Claude Code → OpenCode permission name mapping.
+  _toolsToPermissionYaml =
+    toolsStr:
+    let
+      # Claude Code tool names → OpenCode permission names
+      toolMap = {
+        bash = "bash";
+        read = "read";
+        write = "edit";
+        edit = "edit";
+        find = "glob";
+        search = "grep";
+        lsp = "lsp";
+        task = "task";
+        todowrite = "todowrite";
+        webfetch = "webfetch";
+        websearch = "websearch";
+        skill = "skill";
+      };
+      trimmed = lib.trim toolsStr;
+      rawList = if trimmed == "" then [ ] else map lib.trim (lib.splitString "," trimmed);
+      mappedList = map (tool: toolMap.${tool} or tool) rawList;
+      deduped = lib.unique mappedList;
+    in
+    lib.concatMapStrings (tool: "  ${tool}: allow\n") deduped;
+
+  # Rebuild a frontmatter string from an attrset (discard empty values).
+  _rebuildFrontmatter =
+    attrs:
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (k: v: "${k}: ${v}") (lib.filterAttrs (_: v: v != "") attrs)
+    );
+
+  # ── Agent: Claude Code → OpenCode ──
+  convertAgentToOpenCode =
+    name: agentText:
+    let
+      split = _splitFrontmatter agentText;
+      fm = _parseFrontmatter split.frontmatter;
+      permYaml = _toolsToPermissionYaml (fm.tools or "");
+      newFm = _rebuildFrontmatter {
+        description = fm.description or "";
+        mode = "subagent";
+        permission = if permYaml == "" then "" else "\n${permYaml}";
+      };
+    in
+    if split.frontmatter == "" then agentText else "---\n${newFm}\n---\n\n${split.body}";
+  convertAgentsToOpenCode = agents: mapAttrs convertAgentToOpenCode agents;
+
+  # ── Command: Claude Code → OpenCode ──
+  convertCommandToOpenCode =
+    name: cmdText:
+    let
+      split = _splitFrontmatter cmdText;
+      fm = _parseFrontmatter split.frontmatter;
+      newFm = _rebuildFrontmatter { description = fm.description or ""; };
+    in
+    if split.frontmatter == "" then cmdText else "---\n${newFm}\n---\n\n${split.body}";
+
+  convertCommandsToOpenCode = commands: mapAttrs convertCommandToOpenCode commands;
+
+  # ── Command: Claude Code → Codex ──
+  convertCommandToCodex =
+    name: cmdText:
+    let
+      split = _splitFrontmatter cmdText;
+      fm = _parseFrontmatter split.frontmatter;
+      newFm = _rebuildFrontmatter {
+        description = fm.description or "";
+        argument-hint = fm.argument-hint or "";
+      };
+    in
+    if split.frontmatter == "" then cmdText else "---\n${newFm}\n---\n\n${split.body}";
+
+  convertCommandsToCodex = commands: mapAttrs convertCommandToCodex commands;
+
 in
 {
   inherit commandGroups agentGroups;
@@ -177,11 +304,12 @@ in
     skillFiles = aiSkillFiles;
   };
 
-  # Codex uses a single instructions.md + skills path references
+  # Codex uses a single instructions.md + skills path references.
+  # Prompts are transformed to Codex-compatible frontmatter (description + argument-hint only).
   codex = {
     commandsMarkdown = renderCommandsMarkdown aiCommands;
     agentsMarkdown = renderAgentsMarkdown aiAgents;
-    prompts = aiCommands;
+    prompts = convertCommandsToCodex aiCommands;
     skills = aiSkills;
     skillFiles = aiSkillFiles;
     agentSkills = codexAgentSkills;
@@ -195,6 +323,13 @@ in
     agents = aiAgents;
     skills = aiSkills;
     skillFiles = aiSkillFiles;
+  };
+
+  # opencode agents/commands use OpenCode's YAML frontmatter format
+  # (tools as YAML map, mode: subagent, no spawns/allowed-tools).
+  opencode = {
+    agents = convertAgentsToOpenCode aiAgents;
+    commands = convertCommandsToOpenCode aiCommands;
   };
 
   mergeCommands = existingCommands: newCommands: existingCommands // newCommands;

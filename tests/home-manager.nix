@@ -289,5 +289,32 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-expert/SKILL.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.agents/skills/nix-builder/SKILL.md
 
+    # ── opencode agent format tests ──
+    # Agents should be in agents/ (plural) with OpenCode-compatible YAML frontmatter
+    oc_code_reviewer=${generation}/home-files/.config/opencode/agents/code-reviewer.md
+    oc_commit_changes=${generation}/home-files/.config/opencode/commands/commit-changes.md
+
+    test -f "$oc_code_reviewer"
+    test -f "$oc_commit_changes"
+
+    # Agent frontmatter must use permission field with allow values (not boolean tools)
+    grep -F 'bash: allow' "$oc_code_reviewer" >/dev/null
+    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null
+    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null
+
+    # Agent frontmatter must map Claude Code tool names to OpenCode permission names
+    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null  # find → glob
+    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null  # search → grep
+
+    # Agent frontmatter must not contain Claude-Code-only fields or deprecated tools field
+    ! grep -F 'spawns:' "$oc_code_reviewer" >/dev/null
+    ! grep -F 'tools:' "$oc_code_reviewer" >/dev/null
+    ! grep -F 'find: allow' "$oc_code_reviewer" >/dev/null
+    ! grep -F 'search: allow' "$oc_code_reviewer" >/dev/null
+    # Command frontmatter must strip allowed-tools (opencode doesn't support it)
+    ! grep -F 'allowed-tools:' "$oc_commit_changes" >/dev/null
+    # Command frontmatter must keep description
+    grep -F 'description:' "$oc_commit_changes" >/dev/null
+
     touch $out
   ''
