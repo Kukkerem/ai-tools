@@ -60,10 +60,6 @@ let
 
   claudeCodeHelperPackages = [ llmAgents.ccusage ];
 
-  codexHelperPackages = [ llmAgents.ccusage-codex ];
-
-  opencodeHelperPackages = [ llmAgents.ccusage-opencode ];
-
   ompHelperPackages = [ ];
 
   opencodeRuntimePackages = [
