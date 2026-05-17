@@ -37,13 +37,13 @@ let
         export BASIC_MEMORY_NO_PROMOS=1
         export BASIC_MEMORY_FORCE_LOCAL=true
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.20.3 basic-memory "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.1 basic-memory "$@"
       '')
       (pkgs.writeShellScriptBin "basic-memory-mcp" ''
         export BASIC_MEMORY_NO_PROMOS=1
         export BASIC_MEMORY_FORCE_LOCAL=true
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.20.3 basic-memory mcp "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.1 basic-memory mcp "$@"
       '')
     ];
   };
