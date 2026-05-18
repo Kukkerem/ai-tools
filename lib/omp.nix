@@ -289,7 +289,7 @@ let
 
             export default function (pi) {
               pi.on("tool_call", function (call, ctx) {
-                if (call.tool !== "bash" && call.tool !== "shell") return
+                if (call.toolName !== "bash" && call.toolName !== "shell") return
 
                 var command = String(call.input?.command ?? "")
                 if (!command) return
@@ -334,7 +334,7 @@ let
 
       export default (pi) => {
         pi.on("tool_call", (call, ctx) => {
-          if (call.tool !== "write" && call.tool !== "edit" && call.tool !== "filesystem_write_file") return
+          if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
 
           const fp = String(call.input?.filePath ?? call.input?.path ?? "")
           if (matchesProtected(fp)) {
