@@ -35,7 +35,7 @@
     mcp-nixos.url = "github:utensils/mcp-nixos";
 
     caveman = {
-      url = "github:JuliusBrussee/caveman/63a91ecadbf4c4719a4602a5abb00883f9966034";
+      url = "github:JuliusBrussee/caveman/18e45320a0b1aecc959a807f8568ee44b3aaa055";
       flake = false;
     };
 
@@ -45,7 +45,7 @@
     };
 
     mattpocock-skills = {
-      url = "github:mattpocock/skills/e74f0061bb67222181640effa98c675bdb2fdaa7";
+      url = "github:mattpocock/skills/67bce91c80cd1020a4f068ced32d0281656842ad";
       flake = false;
     };
 
