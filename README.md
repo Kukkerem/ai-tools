@@ -235,7 +235,7 @@ programs.ai-tools.tools.omp = {
     custom.audit-log = ''
       export default function (pi) {
         pi.on("tool_call", function (call) {
-          console.error("[audit]", call.tool)
+          console.error("[audit]", call.toolName)
         })
       }
     '';
