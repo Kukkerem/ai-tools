@@ -88,6 +88,20 @@ let
       '';
     };
 
+  permissionGatePatternType = types.submodule {
+    options = {
+      pattern = mkOption {
+        type = types.str;
+        description = "JavaScript regular expression pattern source.";
+      };
+      flags = mkOption {
+        type = types.str;
+        default = "";
+        description = "JavaScript regular expression flags.";
+      };
+    };
+  };
+
   mkMcpServerEnable =
     profileMcp: serverName:
     let
@@ -903,8 +917,19 @@ let
       light = cfg.tools.omp.theme.light;
     };
     hooks = {
-      permissionGate.enable = cfg.tools.omp.hooks.permissionGate.enable;
-      protectedPaths.enable = cfg.tools.omp.hooks.protectedPaths.enable;
+      permissionGate = {
+        enable = cfg.tools.omp.hooks.permissionGate.enable;
+        blockedPatterns = cfg.tools.omp.hooks.permissionGate.blockedPatterns;
+        blockedCommands = cfg.tools.omp.hooks.permissionGate.blockedCommands;
+        extraBlockedPatterns = cfg.tools.omp.hooks.permissionGate.extraBlockedPatterns;
+        extraBlockedCommands = cfg.tools.omp.hooks.permissionGate.extraBlockedCommands;
+      };
+      protectedPaths = {
+        enable = cfg.tools.omp.hooks.protectedPaths.enable;
+        globs = cfg.tools.omp.hooks.protectedPaths.globs;
+        extraGlobs = cfg.tools.omp.hooks.protectedPaths.extraGlobs;
+      };
+      custom = cfg.tools.omp.hooks.custom;
     };
     mcp = {
       enable = cfg.tools.omp.mcp.enable;
@@ -924,8 +949,8 @@ let
     _name: profile:
     let
       baseProfile = recursiveUpdate legacyOmpProfile profile;
-      hooksProfile = lib.filterAttrs (_: hook: hook.enable != null) (profile.hooks or { });
-      hooksEnable = recursiveUpdate legacyOmpProfile.hooks hooksProfile;
+      hooksProfile = removeNullMcpValues (baseProfile.hooks or { });
+      hooksResolved = recursiveUpdate legacyOmpProfile.hooks hooksProfile;
       profileMcpWithoutInheritGlobal = lib.removeAttrs (removeNullMcpValues (baseProfile.mcp or { })) [
         "inheritGlobal"
       ];
@@ -953,16 +978,12 @@ let
       package = if baseProfile.package != null then baseProfile.package else legacyOmpProfile.package;
       configDir =
         if baseProfile.configDir != null then baseProfile.configDir else legacyOmpProfile.configDir;
-      hooks = hooksEnable;
+      hooks = hooksResolved;
       mcp = profileMcp;
     }
   ) ({ default = { }; } // cfg.tools.omp.profiles);
 
   enabledOmpProfiles = lib.filterAttrs (_name: profile: profile.enable) ompProfiles;
-  defaultOmpProfile = ompProfiles.default;
-  defaultOmpEnabled = defaultOmpProfile.enable;
-
-  extraOmpProfiles = lib.filterAttrs (name: _: name != "default") enabledOmpProfiles;
 
   # Each profile gets a .omp/<profile> config dir under home
   mkOmpProfileFiles =
@@ -978,14 +999,20 @@ let
       hookFiles =
         lib.optionalAttrs (profile.hooks.permissionGate.enable or false) {
           "agent/extensions/permission-gate.ts" = {
-            text = ompSupport.hooks.permissionGate;
+            text = ompSupport.mkPermissionGateHook profile.hooks.permissionGate;
           };
         }
         // lib.optionalAttrs (profile.hooks.protectedPaths.enable or false) {
           "agent/extensions/protected-paths.ts" = {
-            text = ompSupport.hooks.protectedPaths;
+            text = ompSupport.mkProtectedPathsHook profile.hooks.protectedPaths;
           };
-        };
+        }
+        // lib.mapAttrs' (
+          hookName: hookContent:
+          lib.nameValuePair "agent/extensions/${lib.removeSuffix ".ts" hookName}.ts" {
+            text = hookContent;
+          }
+        ) profile.hooks.custom;
     in
     {
       "${dir}/agent/config.yml".source = configContent;
@@ -1761,16 +1788,66 @@ in
         };
 
         hooks = {
-          permissionGate.enable =
-            mkEnableOption "permission gate hook (blocks rm -rf, sudo, chmod 777, etc.)"
-            // {
+          permissionGate = {
+            enable = mkEnableOption "permission gate hook (blocks rm -rf, sudo, chmod 777, etc.)" // {
               default = true;
             };
-          protectedPaths.enable =
-            mkEnableOption "protected paths hook (blocks writes to .env, .git/, node_modules/, etc.)"
-            // {
-              default = true;
+            blockedPatterns = mkOption {
+              type = types.listOf permissionGatePatternType;
+              default = ompSupport.defaultPermissionGateBlockedPatterns;
+              description = "Regular expressions blocked by the omp permission gate hook.";
             };
+            extraBlockedPatterns = mkOption {
+              type = types.listOf permissionGatePatternType;
+              default = [ ];
+              description = "Additional regular expressions appended to the omp permission gate defaults.";
+            };
+            blockedCommands = mkOption {
+              type = types.listOf types.str;
+              default = ompSupport.defaultPermissionGateBlockedCommands;
+              description = "Command names blocked by the omp permission gate hook.";
+            };
+            extraBlockedCommands = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Additional command names appended to the omp permission gate defaults.";
+            };
+          };
+          protectedPaths = {
+            enable =
+              mkEnableOption "protected paths hook (blocks writes to .env, .git/, node_modules/, etc.)"
+              // {
+                default = true;
+              };
+            globs = mkOption {
+              type = types.listOf types.str;
+              default = ompSupport.defaultProtectedPathGlobs;
+              description = "Path globs blocked by the omp protected paths hook.";
+            };
+            extraGlobs = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Additional path globs appended to the omp protected paths defaults.";
+            };
+          };
+          custom = mkOption {
+            type = types.attrsOf types.lines;
+            default = { };
+            example = {
+              "audit-log" = ''
+                import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+                export default function (pi: ExtensionAPI) {
+                  pi.on("tool_call", function (call) {
+                    console.error("[audit]", call.tool)
+                  })
+                }
+              '';
+            };
+            description = ''
+              Additional OMP ExtensionAPI hooks written to `agent/extensions`.
+              Attribute names are hook filenames without the `.ts` suffix.
+            '';
+          };
         };
 
         mcp = {
@@ -1947,15 +2024,54 @@ in
                   };
 
                   hooks = {
-                    permissionGate.enable = mkOption {
-                      type = types.nullOr types.bool;
-                      default = null;
-                      description = "Per-profile permission gate hook override.";
+                    permissionGate = {
+                      enable = mkOption {
+                        type = types.nullOr types.bool;
+                        default = null;
+                        description = "Per-profile permission gate hook override.";
+                      };
+                      blockedPatterns = mkOption {
+                        type = types.nullOr (types.listOf permissionGatePatternType);
+                        default = null;
+                        description = "Per-profile permission gate regular expressions override.";
+                      };
+                      extraBlockedPatterns = mkOption {
+                        type = types.nullOr (types.listOf permissionGatePatternType);
+                        default = null;
+                        description = "Additional per-profile permission gate regular expressions.";
+                      };
+                      blockedCommands = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Per-profile permission gate command names override.";
+                      };
+                      extraBlockedCommands = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Additional per-profile permission gate command names.";
+                      };
                     };
-                    protectedPaths.enable = mkOption {
-                      type = types.nullOr types.bool;
-                      default = null;
-                      description = "Per-profile protected paths hook override.";
+                    protectedPaths = {
+                      enable = mkOption {
+                        type = types.nullOr types.bool;
+                        default = null;
+                        description = "Per-profile protected paths hook override.";
+                      };
+                      globs = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Per-profile protected path globs override.";
+                      };
+                      extraGlobs = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Additional per-profile protected path globs.";
+                      };
+                    };
+                    custom = mkOption {
+                      type = types.attrsOf types.lines;
+                      default = { };
+                      description = "Additional per-profile OMP ExtensionAPI hooks.";
                     };
                   };
 

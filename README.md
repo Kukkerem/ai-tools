@@ -216,8 +216,31 @@ programs.ai-tools.tools.omp = {
   modelSettings.providers = { };
 
   hooks = {
-    permissionGate.enable = true;   # blocks rm -rf, sudo, chmod 777
-    protectedPaths.enable = true;   # blocks writes to .env, .git/, node_modules/
+    permissionGate = {
+      enable = true;   # blocks rm -rf, sudo, chmod 777
+      # Keep defaults and append more gates.
+      extraBlockedCommands = [ "systemctl" ];
+      extraBlockedPatterns = [
+        {
+          pattern = "\\bnix-collect-garbage\\b";
+          flags = "";
+        }
+      ];
+    };
+    protectedPaths = {
+      enable = true;   # blocks writes to .env, .git/, node_modules/
+      # Keep defaults and append more protected paths.
+      extraGlobs = [ "secrets/**" ];
+    };
+    custom.audit-log = ''
+      import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
+
+      export default function (pi: ExtensionAPI) {
+        pi.on("tool_call", function (call) {
+          console.error("[audit]", call.tool)
+        })
+      }
+    '';
   };
 
   mcp.servers = {
