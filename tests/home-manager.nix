@@ -173,8 +173,7 @@ let
                 };
                 protectedPaths.extraGlobs = [ "secrets/**" ];
                 custom.audit-log = ''
-                  import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
-                  export default function (pi: ExtensionAPI) {
+                  export default function (pi) {
                     pi.on("tool_call", function () {
                       return
                     })
@@ -285,16 +284,16 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null
     grep -F 'export OPENROUTER_API_KEY' "$omp_wrapper" >/dev/null
 
-    grep -F 'import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"' "$omp_perm_gate" >/dev/null
-    grep -F 'export default function (pi: ExtensionAPI)' "$omp_perm_gate" >/dev/null
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_perm_gate" >/dev/null
+    grep -F 'export default function (pi)' "$omp_perm_gate" >/dev/null
     grep -F 'return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }' "$omp_perm_gate" >/dev/null
     grep -F '"reboot"' "$omp_perm_gate" >/dev/null
     grep -F 'new RegExp("\\bgit\\s+push\\b", "")' "$omp_perm_gate" >/dev/null
     ! grep -F 'HookAPI' "$omp_perm_gate" >/dev/null
     ! grep -F 'ctx.reject' "$omp_perm_gate" >/dev/null
 
-    grep -F 'import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
-    grep -F 'export default (pi: ExtensionAPI)' "$omp_protected_paths" >/dev/null
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
+    grep -F 'export default (pi) =>' "$omp_protected_paths" >/dev/null
     grep -F 'return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }' "$omp_protected_paths" >/dev/null
     grep -F '".env.*"' "$omp_protected_paths" >/dev/null
     grep -F '".omp/**"' "$omp_protected_paths" >/dev/null
@@ -311,7 +310,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     grep -F '"secrets/**"' "$custom_protected_paths" >/dev/null
     grep -F '".env.*"' "$custom_protected_paths" >/dev/null
     test -f "$custom_audit_hook"
-    grep -F 'export default function (pi: ExtensionAPI)' "$custom_audit_hook" >/dev/null
+    grep -F 'export default function (pi)' "$custom_audit_hook" >/dev/null
 
     # ── omp work profile tests ──
 

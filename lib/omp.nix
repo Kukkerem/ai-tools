@@ -281,15 +281,13 @@ let
       allBlockedCommands = blockedCommands ++ extraBlockedCommands;
     in
     ''
-            import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
-
-            var BLOCKED_PATTERNS: RegExp[] = [
+            var BLOCKED_PATTERNS = [
       ${mkRegExpEntries allBlockedPatterns}
             ]
 
-            var BLOCKED_COMMANDS: string[] = ${builtins.toJSON allBlockedCommands}
+            var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
 
-            export default function (pi: ExtensionAPI) {
+            export default function (pi) {
               pi.on("tool_call", function (call, ctx) {
                 if (call.tool !== "bash" && call.tool !== "shell") return
 
@@ -320,8 +318,6 @@ let
       allGlobs = globs ++ extraGlobs;
     in
     ''
-      import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
-
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
 
       function matchesProtected(fp: string): boolean {
@@ -336,7 +332,7 @@ let
         return false
       }
 
-      export default (pi: ExtensionAPI) => {
+      export default (pi) => {
         pi.on("tool_call", (call, ctx) => {
           if (call.tool !== "write" && call.tool !== "edit" && call.tool !== "filesystem_write_file") return
 
