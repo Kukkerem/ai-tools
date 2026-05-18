@@ -193,7 +193,7 @@ let
       toolName: string;
       input?: Record<string, unknown>;
     };
-    type Handler = (call: ToolCall, ctx: Record<string, unknown>) => unknown;
+    type Handler = (call: ToolCall, ctx: Record<string, unknown>) => unknown | Promise<unknown>;
 
     async function loadHook(path: string): Promise<Handler> {
       const handlers: Record<string, Handler[]> = {};
@@ -229,46 +229,46 @@ let
 
     const permissionGate = await loadHook(process.argv[2]!);
     assertBlocked(
-      permissionGate({ toolName: "bash", input: { command: "git push origin main" } }, {}),
+      await permissionGate({ toolName: "bash", input: { command: "git push origin main" } }, {}),
       "Permission gate blocked",
     );
     assertBlocked(
-      permissionGate({ toolName: "shell", input: { command: "reboot" } }, {}),
+      await permissionGate({ toolName: "shell", input: { command: "reboot" } }, {}),
       "reboot is not allowed",
     );
-    assertAllowed(permissionGate({ toolName: "bash", input: { command: "echo safe" } }, {}));
-    assertAllowed(permissionGate({ toolName: "write", input: { path: ".env" } }, {}));
+    assertAllowed(await permissionGate({ toolName: "bash", input: { command: "echo safe" } }, {}));
+    assertAllowed(await permissionGate({ toolName: "write", input: { path: ".env" } }, {}));
 
     const protectedPaths = await loadHook(process.argv[3]!);
-    assertBlocked(protectedPaths({ toolName: "write", input: { path: ".env" } }, {}), "Protected path");
-    assertBlocked(protectedPaths({ toolName: "edit", input: { filePath: ".git/config" } }, {}), "Protected path");
+    assertBlocked(await protectedPaths({ toolName: "write", input: { path: ".env" } }, {}), "Protected path");
+    assertBlocked(await protectedPaths({ toolName: "edit", input: { filePath: ".git/config" } }, {}), "Protected path");
     assertBlocked(
-      protectedPaths({ toolName: "filesystem_write_file", input: { path: "node_modules/pkg/index.js" } }, {}),
+      await protectedPaths({ toolName: "filesystem_write_file", input: { path: "node_modules/pkg/index.js" } }, {}),
       "Protected path",
     );
-    assertAllowed(protectedPaths({ toolName: "write", input: { path: "src/main.ts" } }, {}));
-    assertAllowed(protectedPaths({ toolName: "bash", input: { command: "touch .env" } }, {}));
+    assertAllowed(await protectedPaths({ toolName: "write", input: { path: "src/main.ts" } }, {}));
+    assertAllowed(await protectedPaths({ toolName: "bash", input: { command: "touch .env" } }, {}));
 
     const customPermissionGate = await loadHook(process.argv[4]!);
     assertBlocked(
-      customPermissionGate({ toolName: "bash", input: { command: "nix-collect-garbage -d" } }, {}),
+      await customPermissionGate({ toolName: "bash", input: { command: "nix-collect-garbage -d" } }, {}),
       "Permission gate blocked",
     );
     assertBlocked(
-      customPermissionGate({ toolName: "bash", input: { command: "systemctl reboot" } }, {}),
+      await customPermissionGate({ toolName: "bash", input: { command: "systemctl reboot" } }, {}),
       "systemctl is not allowed",
     );
     assertBlocked(
-      customPermissionGate({ toolName: "bash", input: { command: "reboot" } }, {}),
+      await customPermissionGate({ toolName: "bash", input: { command: "reboot" } }, {}),
       "reboot is not allowed",
     );
 
     const customProtectedPaths = await loadHook(process.argv[5]!);
-    assertBlocked(customProtectedPaths({ toolName: "write", input: { path: "secrets/token" } }, {}), "Protected path");
-    assertBlocked(customProtectedPaths({ toolName: "write", input: { path: ".env" } }, {}), "Protected path");
+    assertBlocked(await customProtectedPaths({ toolName: "write", input: { path: "secrets/token" } }, {}), "Protected path");
+    assertBlocked(await customProtectedPaths({ toolName: "write", input: { path: ".env" } }, {}), "Protected path");
 
     const customAudit = await loadHook(process.argv[6]!);
-    assertAllowed(customAudit({ toolName: "bash", input: { command: "echo safe" } }, {}));
+    assertAllowed(await customAudit({ toolName: "bash", input: { command: "echo safe" } }, {}));
   '';
 in
 pkgs.runCommand "ai-tools-home-manager-tests"

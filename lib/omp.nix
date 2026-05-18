@@ -274,11 +274,13 @@ let
       blockedCommands ? defaultPermissionGateBlockedCommands,
       extraBlockedPatterns ? [ ],
       extraBlockedCommands ? [ ],
+      mode ? "ask",
       ...
     }:
     let
       allBlockedPatterns = blockedPatterns ++ extraBlockedPatterns;
       allBlockedCommands = blockedCommands ++ extraBlockedCommands;
+      modeAsk = mode == "ask";
     in
     ''
             var BLOCKED_PATTERNS = [
@@ -288,7 +290,7 @@ let
             var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
 
             export default function (pi) {
-              pi.on("tool_call", function (call, ctx) {
+              pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
                 if (call.toolName !== "bash" && call.toolName !== "shell") return
 
                 var command = String(call.input?.command ?? "")
@@ -296,13 +298,36 @@ let
 
                 for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
                   if (BLOCKED_PATTERNS[i].test(command)) {
-                    return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+      ${
+        if modeAsk then
+          ''
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + " may be dangerous.\nProceed?")
+            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
+            return
+          ''
+        else
+          ''
+            return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+          ''
+      }
                   }
                 }
 
                 var firstWord = command.trim().split(/\s+/)[0] ?? ""
                 if (BLOCKED_COMMANDS.includes(firstWord)) {
-                  return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+      ${
+        if modeAsk then
+          ''
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + "\n\n" + firstWord + " is not allowed.\nProceed?")
+            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
+          ''
+        else
+          ''
+            return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+          ''
+      }
                 }
               })
             }

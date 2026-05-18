@@ -217,7 +217,8 @@ programs.ai-tools.tools.omp = {
 
   hooks = {
     permissionGate = {
-      enable = true;   # blocks rm -rf, sudo, chmod 777
+      enable = true;   # ask-mode by default — prompts for confirmation before running dangerous commands
+      # mode = "block"; # uncomment to hard-block instead of asking
       # Keep defaults and append more gates.
       extraBlockedCommands = [ "systemctl" ];
       extraBlockedPatterns = [

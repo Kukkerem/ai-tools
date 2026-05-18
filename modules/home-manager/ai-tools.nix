@@ -923,6 +923,7 @@ let
         blockedCommands = cfg.tools.omp.hooks.permissionGate.blockedCommands;
         extraBlockedPatterns = cfg.tools.omp.hooks.permissionGate.extraBlockedPatterns;
         extraBlockedCommands = cfg.tools.omp.hooks.permissionGate.extraBlockedCommands;
+        mode = cfg.tools.omp.hooks.permissionGate.mode;
       };
       protectedPaths = {
         enable = cfg.tools.omp.hooks.protectedPaths.enable;
@@ -1812,6 +1813,18 @@ in
               default = [ ];
               description = "Additional command names appended to the omp permission gate defaults.";
             };
+            mode = mkOption {
+              type = types.enum [
+                "block"
+                "ask"
+              ];
+              default = "ask";
+              description = ''
+                Response mode for the permission gate hook:
+                - "block": Hard-block matching commands.
+                - "ask": Prompt for user confirmation (falls back to block when no UI is available).
+              '';
+            };
           };
           protectedPaths = {
             enable =
@@ -2048,6 +2061,16 @@ in
                         type = types.nullOr (types.listOf types.str);
                         default = null;
                         description = "Additional per-profile permission gate command names.";
+                      };
+                      mode = mkOption {
+                        type = types.nullOr (
+                          types.enum [
+                            "block"
+                            "ask"
+                          ]
+                        );
+                        default = null;
+                        description = "Per-profile permission gate response mode override.";
                       };
                     };
                     protectedPaths = {
