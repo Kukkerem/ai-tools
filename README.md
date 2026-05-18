@@ -233,9 +233,7 @@ programs.ai-tools.tools.omp = {
       extraGlobs = [ "secrets/**" ];
     };
     custom.audit-log = ''
-      import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
-
-      export default function (pi: ExtensionAPI) {
+      export default function (pi) {
         pi.on("tool_call", function (call) {
           console.error("[audit]", call.tool)
         })

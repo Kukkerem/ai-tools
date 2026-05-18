@@ -173,8 +173,7 @@ let
                 };
                 protectedPaths.extraGlobs = [ "secrets/**" ];
                 custom.audit-log = ''
-                  import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
-                  export default function (pi: ExtensionAPI) {
+                  export default function (pi) {
                     pi.on("tool_call", function () {
                       return
                     })
@@ -186,10 +185,96 @@ let
         }
       ];
     }).activationPackage;
+
+  ompHookRuntimeTest = pkgs.writeText "omp-hook-runtime-test.ts" ''
+    import { pathToFileURL } from "node:url";
+
+    type ToolCall = {
+      tool: string;
+      input?: Record<string, unknown>;
+    };
+    type Handler = (call: ToolCall, ctx: Record<string, unknown>) => unknown;
+
+    async function loadHook(path: string): Promise<Handler> {
+      const handlers: Record<string, Handler[]> = {};
+      const mod = await import(pathToFileURL(path).href);
+      mod.default({
+        on(event: string, handler: Handler) {
+          (handlers[event] ??= []).push(handler);
+        },
+      });
+
+      const toolHandlers = handlers.tool_call ?? [];
+      if (toolHandlers.length !== 1) {
+        throw new Error(path + ": expected one tool_call handler, got " + toolHandlers.length);
+      }
+      return toolHandlers[0]!;
+    }
+
+    function assertBlocked(actual: unknown, reasonIncludes: string): void {
+      if (!actual || typeof actual !== "object" || (actual as { block?: unknown }).block !== true) {
+        throw new Error("expected block result, got " + JSON.stringify(actual));
+      }
+      const reason = String((actual as { reason?: unknown }).reason ?? "");
+      if (!reason.includes(reasonIncludes)) {
+        throw new Error("expected reason to include " + reasonIncludes + ", got " + reason);
+      }
+    }
+
+    function assertAllowed(actual: unknown): void {
+      if (actual !== undefined) {
+        throw new Error("expected undefined allow result, got " + JSON.stringify(actual));
+      }
+    }
+
+    const permissionGate = await loadHook(process.argv[2]!);
+    assertBlocked(
+      permissionGate({ tool: "bash", input: { command: "git push origin main" } }, {}),
+      "Permission gate blocked",
+    );
+    assertBlocked(
+      permissionGate({ tool: "shell", input: { command: "reboot" } }, {}),
+      "reboot is not allowed",
+    );
+    assertAllowed(permissionGate({ tool: "bash", input: { command: "echo safe" } }, {}));
+    assertAllowed(permissionGate({ tool: "write", input: { path: ".env" } }, {}));
+
+    const protectedPaths = await loadHook(process.argv[3]!);
+    assertBlocked(protectedPaths({ tool: "write", input: { path: ".env" } }, {}), "Protected path");
+    assertBlocked(protectedPaths({ tool: "edit", input: { filePath: ".git/config" } }, {}), "Protected path");
+    assertBlocked(
+      protectedPaths({ tool: "filesystem_write_file", input: { path: "node_modules/pkg/index.js" } }, {}),
+      "Protected path",
+    );
+    assertAllowed(protectedPaths({ tool: "write", input: { path: "src/main.ts" } }, {}));
+    assertAllowed(protectedPaths({ tool: "bash", input: { command: "touch .env" } }, {}));
+
+    const customPermissionGate = await loadHook(process.argv[4]!);
+    assertBlocked(
+      customPermissionGate({ tool: "bash", input: { command: "nix-collect-garbage -d" } }, {}),
+      "Permission gate blocked",
+    );
+    assertBlocked(
+      customPermissionGate({ tool: "bash", input: { command: "systemctl reboot" } }, {}),
+      "systemctl is not allowed",
+    );
+    assertBlocked(
+      customPermissionGate({ tool: "bash", input: { command: "reboot" } }, {}),
+      "reboot is not allowed",
+    );
+
+    const customProtectedPaths = await loadHook(process.argv[5]!);
+    assertBlocked(customProtectedPaths({ tool: "write", input: { path: "secrets/token" } }, {}), "Protected path");
+    assertBlocked(customProtectedPaths({ tool: "write", input: { path: ".env" } }, {}), "Protected path");
+
+    const customAudit = await loadHook(process.argv[6]!);
+    assertAllowed(customAudit({ tool: "bash", input: { command: "echo safe" } }, {}));
+  '';
 in
 pkgs.runCommand "ai-tools-home-manager-tests"
   {
     nativeBuildInputs = [
+      pkgs.bun
       pkgs.jq
       pkgs.yq-go
     ];
@@ -285,16 +370,16 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null
     grep -F 'export OPENROUTER_API_KEY' "$omp_wrapper" >/dev/null
 
-    grep -F 'import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"' "$omp_perm_gate" >/dev/null
-    grep -F 'export default function (pi: ExtensionAPI)' "$omp_perm_gate" >/dev/null
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_perm_gate" >/dev/null
+    grep -F 'export default function (pi)' "$omp_perm_gate" >/dev/null
     grep -F 'return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }' "$omp_perm_gate" >/dev/null
     grep -F '"reboot"' "$omp_perm_gate" >/dev/null
     grep -F 'new RegExp("\\bgit\\s+push\\b", "")' "$omp_perm_gate" >/dev/null
     ! grep -F 'HookAPI' "$omp_perm_gate" >/dev/null
     ! grep -F 'ctx.reject' "$omp_perm_gate" >/dev/null
 
-    grep -F 'import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
-    grep -F 'export default (pi: ExtensionAPI)' "$omp_protected_paths" >/dev/null
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
+    grep -F 'export default (pi) =>' "$omp_protected_paths" >/dev/null
     grep -F 'return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }' "$omp_protected_paths" >/dev/null
     grep -F '".env.*"' "$omp_protected_paths" >/dev/null
     grep -F '".omp/**"' "$omp_protected_paths" >/dev/null
@@ -311,7 +396,14 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     grep -F '"secrets/**"' "$custom_protected_paths" >/dev/null
     grep -F '".env.*"' "$custom_protected_paths" >/dev/null
     test -f "$custom_audit_hook"
-    grep -F 'export default function (pi: ExtensionAPI)' "$custom_audit_hook" >/dev/null
+    grep -F 'export default function (pi)' "$custom_audit_hook" >/dev/null
+
+    bun ${ompHookRuntimeTest} \
+      "$omp_perm_gate" \
+      "$omp_protected_paths" \
+      "$custom_perm_gate" \
+      "$custom_protected_paths" \
+      "$custom_audit_hook"
 
     # ── omp work profile tests ──
 
