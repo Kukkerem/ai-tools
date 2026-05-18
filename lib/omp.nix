@@ -9,13 +9,11 @@ let
   yamlFormat = pkgs.formats.yaml { };
 
   inherit (lib)
+    concatMapStringsSep
     escapeShellArg
     filterAttrs
-    mapAttrs'
     mapAttrsToList
     nameValuePair
-    optionalAttrs
-    optionalString
     recursiveUpdate
     ;
 
@@ -203,91 +201,152 @@ let
       '';
     };
 
-  permissionGateHook = ''
-    import type { HookAPI } from "oh-my-pi"
+  defaultPermissionGateBlockedPatterns = [
+    {
+      pattern = "\\brm\\s+(-[^\\s]*r[^\\s]*\\s|-[^\\s]*rf\\s)";
+      flags = "i";
+    }
+    {
+      pattern = "\\bsudo\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bchmod\\s+(-R\\s+)?777\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bchown\\s+(-R\\s+)?root\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bmkfs\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdd\\s+if=";
+      flags = "i";
+    }
+    {
+      pattern = "\\b:(){ :|:& };:";
+      flags = "";
+    }
+    {
+      pattern = "\\bwget\\s+.*\\|\\s*(ba)?sh\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bcurl\\s+.*\\|\\s*(ba)?sh\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgit\\s+push\\b";
+      flags = "";
+    }
+  ];
 
-    var BLOCKED_PATTERNS: RegExp[] = [
-      /\brm\s+(-[^\s]*r[^\s]*\s|-[^\s]*rf\s)/i,
-      /\bsudo\b/i,
-      /\bchmod\s+(-R\s+)?777\b/i,
-      /\bchown\s+(-R\s+)?root\b/i,
-      /\bmkfs\b/i,
-      /\bdd\s+if=/i,
-      /\b:(){ :|:& };:/,
-      /\bwget\s+.*\|\s*(ba)?sh\b/i,
-      /\bcurl\s+.*\|\s*(ba)?sh\b/i,
-      /\bgit\s+push\b/,
-    ]
+  defaultPermissionGateBlockedCommands = [
+    "reboot"
+    "shutdown"
+    "poweroff"
+    "halt"
+  ];
 
-    var BLOCKED_COMMANDS: string[] = [
-      "reboot",
-      "shutdown",
-      "poweroff",
-      "halt",
-    ]
+  defaultProtectedPathGlobs = [
+    ".env"
+    ".env.*"
+    ".git/**"
+    "node_modules/**"
+    ".direnv/**"
+    ".devenv/**"
+    ".omp/**"
+  ];
 
-    export default function (pi: HookAPI) {
-      pi.on("tool_call", function (call, ctx) {
-        if (call.tool !== "bash" && call.tool !== "shell") return
+  mkRegExpEntries =
+    patterns:
+    concatMapStringsSep "\n" (
+      pattern:
+      "      new RegExp(${builtins.toJSON pattern.pattern}, ${builtins.toJSON (pattern.flags or "")}),"
+    ) patterns;
 
-        var command = String(call.input?.command ?? "")
-        if (!command) return
+  mkPermissionGateHook =
+    {
+      blockedPatterns ? defaultPermissionGateBlockedPatterns,
+      blockedCommands ? defaultPermissionGateBlockedCommands,
+      extraBlockedPatterns ? [ ],
+      extraBlockedCommands ? [ ],
+      ...
+    }:
+    let
+      allBlockedPatterns = blockedPatterns ++ extraBlockedPatterns;
+      allBlockedCommands = blockedCommands ++ extraBlockedCommands;
+    in
+    ''
+            var BLOCKED_PATTERNS = [
+      ${mkRegExpEntries allBlockedPatterns}
+            ]
 
-        for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
-          if (BLOCKED_PATTERNS[i].test(command)) {
-            ctx.reject("Permission gate blocked: command matches dangerous pattern")
-            return
+            var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
+
+            export default function (pi) {
+              pi.on("tool_call", function (call, ctx) {
+                if (call.tool !== "bash" && call.tool !== "shell") return
+
+                var command = String(call.input?.command ?? "")
+                if (!command) return
+
+                for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
+                  if (BLOCKED_PATTERNS[i].test(command)) {
+                    return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+                  }
+                }
+
+                var firstWord = command.trim().split(/\s+/)[0] ?? ""
+                if (BLOCKED_COMMANDS.includes(firstWord)) {
+                  return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+                }
+              })
+            }
+    '';
+
+  mkProtectedPathsHook =
+    {
+      globs ? defaultProtectedPathGlobs,
+      extraGlobs ? [ ],
+      ...
+    }:
+    let
+      allGlobs = globs ++ extraGlobs;
+    in
+    ''
+      const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
+
+      function matchesProtected(fp: string): boolean {
+        for (const glob of PROTECTED_GLOBS) {
+          if (glob.endsWith("/**")) {
+            const prefix = glob.slice(0, -3)
+            if (fp === prefix || fp.startsWith(prefix + "/")) return true
+          } else {
+            if (fp === glob) return true
           }
         }
-
-        var firstWord = command.trim().split(/\s+/)[0] ?? ""
-        if (BLOCKED_COMMANDS.includes(firstWord)) {
-          ctx.reject("Permission gate blocked: " + firstWord + " is not allowed")
-        }
-      })
-    }
-  '';
-
-  protectedPathsHook = ''
-    import type { HookAPI } from "oh-my-pi"
-
-    const PROTECTED_GLOBS = [
-      ".env",
-      ".env.*",
-      ".git/**",
-      "node_modules/**",
-      ".direnv/**",
-      ".devenv/**",
-      ".omp/**",
-    ]
-
-    function matchesProtected(fp: string): boolean {
-      for (const glob of PROTECTED_GLOBS) {
-        if (glob.endsWith("/**")) {
-          const prefix = glob.slice(0, -3)
-          if (fp === prefix || fp.startsWith(prefix + "/")) return true
-        } else {
-          if (fp === glob) return true
-        }
+        return false
       }
-      return false
-    }
 
-    export default (pi: HookAPI) => {
-      pi.on("tool_call", (call, { reject }) => {
-        if (call.tool !== "write" && call.tool !== "edit" && call.tool !== "filesystem_write_file") return
+      export default (pi) => {
+        pi.on("tool_call", (call, ctx) => {
+          if (call.tool !== "write" && call.tool !== "edit" && call.tool !== "filesystem_write_file") return
 
-        const fp = String(call.input?.filePath ?? call.input?.path ?? "")
-        if (matchesProtected(fp)) {
-          reject("Protected path: writing to " + fp + " is blocked")
-        }
-      })
-    }
-  '';
+          const fp = String(call.input?.filePath ?? call.input?.path ?? "")
+          if (matchesProtected(fp)) {
+            return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }
+          }
+        })
+      }
+    '';
 
   hooks = {
-    permissionGate = permissionGateHook;
-    protectedPaths = protectedPathsHook;
+    permissionGate = mkPermissionGateHook { };
+    protectedPaths = mkProtectedPathsHook { };
   };
 
   mkYamlConfig =
@@ -316,7 +375,12 @@ let
 in
 {
   inherit
+    defaultPermissionGateBlockedCommands
+    defaultPermissionGateBlockedPatterns
+    defaultProtectedPathGlobs
     hooks
+    mkPermissionGateHook
+    mkProtectedPathsHook
     mkOmpConfig
     mkOmpModels
     mkOmpWrapper

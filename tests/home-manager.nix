@@ -146,6 +146,45 @@ let
         }
       ];
     }).activationPackage;
+
+  customHooksGeneration =
+    (inputs.home-manager.lib.homeManagerConfiguration {
+      inherit pkgs;
+      modules = [
+        aiToolsModule
+        {
+          home.username = "tester";
+          home.homeDirectory = "/home/tester";
+          home.stateVersion = "25.05";
+
+          programs.ai-tools = {
+            enable = true;
+            tools.omp = {
+              enable = true;
+              hooks = {
+                permissionGate = {
+                  extraBlockedPatterns = [
+                    {
+                      pattern = "\\bnix-collect-garbage\\b";
+                      flags = "";
+                    }
+                  ];
+                  extraBlockedCommands = [ "systemctl" ];
+                };
+                protectedPaths.extraGlobs = [ "secrets/**" ];
+                custom.audit-log = ''
+                  export default function (pi) {
+                    pi.on("tool_call", function () {
+                      return
+                    })
+                  }
+                '';
+              };
+            };
+          };
+        }
+      ];
+    }).activationPackage;
 in
 pkgs.runCommand "ai-tools-home-manager-tests"
   {
@@ -200,6 +239,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     omp_default_mcp=${generation}/home-files/.omp/agent/mcp.json
     omp_wrapper=${generation}/home-path/bin/omp
     omp_perm_gate=${generation}/home-files/.omp/agent/extensions/permission-gate.ts
+    omp_protected_paths=${generation}/home-files/.omp/agent/extensions/protected-paths.ts
     omp_agent_browser_reference=${generation}/home-files/.omp/agent/skills/agent-browser/references/commands.md
     omp_caveman_compress_script=${generation}/home-files/.omp/agent/skills/caveman-compress/scripts/compress.py
     omp_tdd_skill=${generation}/home-files/.omp/agent/skills/tdd/SKILL.md
@@ -211,6 +251,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -f "$omp_default_mcp"
     test -x "$omp_wrapper"
     test -f "$omp_perm_gate"
+    test -f "$omp_protected_paths"
     test -f "$omp_agent_browser_reference"
     test -f "$omp_caveman_compress_script"
     test -f "$omp_tdd_skill"
@@ -242,6 +283,34 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     grep -F 'export PI_CONFIG_DIR=.omp' "$omp_wrapper" >/dev/null
     grep -F 'OPENROUTER_API_KEY="$(< /run/secrets/openrouter-api-key)"' "$omp_wrapper" >/dev/null
     grep -F 'export OPENROUTER_API_KEY' "$omp_wrapper" >/dev/null
+
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_perm_gate" >/dev/null
+    grep -F 'export default function (pi)' "$omp_perm_gate" >/dev/null
+    grep -F 'return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }' "$omp_perm_gate" >/dev/null
+    grep -F '"reboot"' "$omp_perm_gate" >/dev/null
+    grep -F 'new RegExp("\\bgit\\s+push\\b", "")' "$omp_perm_gate" >/dev/null
+    ! grep -F 'HookAPI' "$omp_perm_gate" >/dev/null
+    ! grep -F 'ctx.reject' "$omp_perm_gate" >/dev/null
+
+    ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
+    grep -F 'export default (pi) =>' "$omp_protected_paths" >/dev/null
+    grep -F 'return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }' "$omp_protected_paths" >/dev/null
+    grep -F '".env.*"' "$omp_protected_paths" >/dev/null
+    grep -F '".omp/**"' "$omp_protected_paths" >/dev/null
+    ! grep -F 'HookAPI' "$omp_protected_paths" >/dev/null
+    ! grep -F 'reject(' "$omp_protected_paths" >/dev/null
+
+    custom_perm_gate=${customHooksGeneration}/home-files/.omp/agent/extensions/permission-gate.ts
+    custom_protected_paths=${customHooksGeneration}/home-files/.omp/agent/extensions/protected-paths.ts
+    custom_audit_hook=${customHooksGeneration}/home-files/.omp/agent/extensions/audit-log.ts
+    grep -F 'new RegExp("\\bnix-collect-garbage\\b", "")' "$custom_perm_gate" >/dev/null
+    grep -F '"systemctl"' "$custom_perm_gate" >/dev/null
+    grep -F '"reboot"' "$custom_perm_gate" >/dev/null
+    grep -F 'new RegExp("\\bgit\\s+push\\b", "")' "$custom_perm_gate" >/dev/null
+    grep -F '"secrets/**"' "$custom_protected_paths" >/dev/null
+    grep -F '".env.*"' "$custom_protected_paths" >/dev/null
+    test -f "$custom_audit_hook"
+    grep -F 'export default function (pi)' "$custom_audit_hook" >/dev/null
 
     # ── omp work profile tests ──
 
