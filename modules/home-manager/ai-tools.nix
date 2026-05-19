@@ -2338,7 +2338,7 @@ in
       terraform.enable = mkOption {
         type = types.bool;
         default = false;
-        description = "Terraform skill. Auto-enabled when the terraform MCP server is enabled.";
+        description = "Terraform skill from antonbabenko/terraform-skill.";
       };
     };
   };
@@ -2501,10 +2501,6 @@ in
 
     (mkIf cfg.mcp.servers.basic-memory.enable {
       programs.ai-tools.skills.basicMemory.enable = mkDefault true;
-    })
-
-    (mkIf cfg.mcp.servers.terraform.enable {
-      programs.ai-tools.skills.terraform.enable = mkDefault true;
     })
 
     (mkIf (cfg.tools.opencode.enable && opencodeRtkEnabled) {

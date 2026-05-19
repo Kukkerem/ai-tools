@@ -35,7 +35,7 @@ let
   superpowersSkillFiles = name: regularFilesRecursive "${superpowersSrc}/skills/${name}";
 
   terraformSkillSrc = inputs.terraform-skill;
-  terraformSkillFiles = regularFilesRecursive terraformSkillSrc;
+  terraformSkillFiles = regularFilesRecursive "${terraformSkillSrc}/skills/terraform-skill";
 
   pathBackedSkillFiles = name: regularFilesRecursive skills.${name};
 in
