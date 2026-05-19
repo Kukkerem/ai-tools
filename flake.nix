@@ -34,6 +34,11 @@
 
     mcp-nixos.url = "github:utensils/mcp-nixos";
 
+    terraform-skill = {
+      url = "github:antonbabenko/terraform-skill";
+      flake = false;
+    };
+
     caveman = {
       url = "github:JuliusBrussee/caveman/18e45320a0b1aecc959a807f8568ee44b3aaa055";
       flake = false;

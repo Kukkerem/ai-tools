@@ -229,6 +229,7 @@ let
     ++ (if cfg.skills.basicMemory.enable then [ "basic-memory" ] else [ ])
     ++ (if cfg.skills.dcp.enable then [ "dcp" ] else [ ])
     ++ (if cfg.skills.karpathyGuidelines.enable then [ "karpathy-guidelines" ] else [ ])
+    ++ (if cfg.skills.terraform.enable then [ "terraform" ] else [ ])
     ++ optionals cfg.skills.caveman.enable cavemanSkillNames
     ++ optionals cfg.skills.mattpocock.enable mattpocockSkillNames
     ++ optionals cfg.skills.superpowers.enable superpowersSkillNames
@@ -2333,6 +2334,12 @@ in
         default = false;
         description = "RTK (Reduce Token Karma) skill. Auto-enabled when any opencode profile has RTK enabled.";
       };
+
+      terraform.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Terraform skill. Auto-enabled when the terraform MCP server is enabled.";
+      };
     };
   };
 
@@ -2494,6 +2501,10 @@ in
 
     (mkIf cfg.mcp.servers.basic-memory.enable {
       programs.ai-tools.skills.basicMemory.enable = mkDefault true;
+    })
+
+    (mkIf cfg.mcp.servers.terraform.enable {
+      programs.ai-tools.skills.terraform.enable = mkDefault true;
     })
 
     (mkIf (cfg.tools.opencode.enable && opencodeRtkEnabled) {

@@ -34,6 +34,9 @@ let
 
   superpowersSkillFiles = name: regularFilesRecursive "${superpowersSrc}/skills/${name}";
 
+  terraformSkillSrc = inputs.terraform-skill;
+  terraformSkillFiles = regularFilesRecursive terraformSkillSrc;
+
   pathBackedSkillFiles = name: regularFilesRecursive skills.${name};
 in
 {
@@ -75,4 +78,6 @@ in
   verification-before-completion = superpowersSkillFiles "verification-before-completion";
   writing-plans = superpowersSkillFiles "writing-plans";
   writing-skills = superpowersSkillFiles "writing-skills";
+
+  terraform = terraformSkillFiles;
 }

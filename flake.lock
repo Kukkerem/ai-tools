@@ -384,7 +384,8 @@
         "mcp-openrouter-search": "mcp-openrouter-search",
         "mcp-servers-nix": "mcp-servers-nix",
         "nixpkgs": "nixpkgs_4",
-        "superpowers": "superpowers"
+        "superpowers": "superpowers",
+        "terraform-skill": "terraform-skill"
       }
     },
     "superpowers": {
@@ -431,6 +432,22 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "terraform-skill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779098020,
+        "narHash": "sha256-SdySVD1dNQ42xERbXENSrBpaitVujeYyICKPtlBVUAM=",
+        "owner": "antonbabenko",
+        "repo": "terraform-skill",
+        "rev": "c27f3eca6ff43212edc0f6eafd0c2a3722ddc617",
+        "type": "github"
+      },
+      "original": {
+        "owner": "antonbabenko",
+        "repo": "terraform-skill",
         "type": "github"
       }
     },
