@@ -409,14 +409,15 @@ let
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
             var choice = await ctx.ui.select("Permission Gate: " + command + " may be dangerous.", [
-              { label: "Allow once", value: "once" },
-              { label: "Allow for session", value: "session" },
-              { label: "Always allow", value: "always" },
-              { label: "Deny", value: "deny" }
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
             ])
-            if (!choice || choice === "deny") return { block: true, reason: "Permission gate: user denied command" }
-            if (choice === "once") return
-            saveGrant(command, choice)
+            if (!choice || choice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (choice === "Allow once") return
+            var scope = choice === "Always allow" ? "always" : "session"
+            saveGrant(command, scope)
           ''
         else
           ''
@@ -435,14 +436,15 @@ let
             if (cmdGrant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
             var cmdChoice = await ctx.ui.select("Permission Gate: " + firstWord + " is not allowed. Command: " + command, [
-              { label: "Allow once", value: "once" },
-              { label: "Allow for session", value: "session" },
-              { label: "Always allow", value: "always" },
-              { label: "Deny", value: "deny" }
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
             ])
-            if (!cmdChoice || cmdChoice === "deny") return { block: true, reason: "Permission gate: user denied command" }
-            if (cmdChoice === "once") return
-            saveGrant(firstWord, cmdChoice)
+            if (!cmdChoice || cmdChoice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (cmdChoice === "Allow once") return
+            var cmdScope = cmdChoice === "Always allow" ? "always" : "session"
+            saveGrant(firstWord, cmdScope)
           ''
         else
           ''
@@ -678,14 +680,15 @@ let
           ''
             if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
             var choice = await ctx.ui.select("Path Access: " + fp + " is outside the workspace.", [
-              { label: "Allow once", value: "once" },
-              { label: "Allow for session", value: "session" },
-              { label: "Always allow", value: "always" },
-              { label: "Deny", value: "deny" }
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
             ])
-            if (!choice || choice === "deny") return { block: true, reason: "Path access: user denied " + fp }
-            if (choice === "once") return
-            saveGrant(fp, choice)
+            if (!choice || choice === "Deny") return { block: true, reason: "Path access: user denied " + fp }
+            if (choice === "Allow once") return
+            var fpScope = choice === "Always allow" ? "always" : "session"
+            saveGrant(fp, fpScope)
           ''
         else if modeBlock then
           ''
