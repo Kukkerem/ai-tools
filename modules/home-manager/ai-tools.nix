@@ -1014,16 +1014,12 @@ let
         }
         // lib.optionalAttrs (profile.hooks.protectedPaths.enable or false) {
           "agent/extensions/protected-paths.ts" = {
-            text = ompSupport.mkProtectedPathsHook profile.hooks.protectedPaths;
-          };
-        }
-
-        // lib.optionalAttrs (profile.hooks.pathAccess.enable or false) {
-          "agent/extensions/path-access.ts" = {
-            text = ompSupport.mkPathAccessHook (
-              profile.hooks.pathAccess
+            text = ompSupport.mkProtectedPathsHook (
+              profile.hooks.protectedPaths
               // {
-                protectedGlobs = profile.hooks.protectedPaths.globs or ompSupport.defaultProtectedPathGlobs;
+                allowPaths = profile.hooks.pathAccess.allowPaths or ompSupport.defaultPathAccessAllowPaths;
+                denyPaths = profile.hooks.pathAccess.denyPaths or ompSupport.defaultPathAccessDenyPaths;
+                pathAccessMode = profile.hooks.pathAccess.mode or "ask";
               }
             );
           };

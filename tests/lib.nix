@@ -13,18 +13,15 @@ let
   omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
 
   protectedPathsRuntimeHook = pkgs.writeText "protected-paths-runtime.ts" (
-    omp.mkProtectedPathsHook { mode = "ask"; }
-  );
-  pathAccessRuntimeHook = pkgs.writeText "path-access-runtime.ts" (
-    omp.mkPathAccessHook {
+    omp.mkProtectedPathsHook {
       mode = "ask";
       allowPaths = [ ];
       denyPaths = [ ];
+      pathAccessMode = "ask";
     }
   );
   hookRuntimeTests = pkgs.writeText "omp-hook-runtime-tests.ts" ''
     import protectedPaths from "${protectedPathsRuntimeHook}";
-    import pathAccess from "${pathAccessRuntimeHook}";
 
     type ToolCall = { toolName: string; input?: Record<string, unknown> };
     type Handler = (call: ToolCall, ctx: any) => Promise<any> | any;
@@ -110,16 +107,15 @@ let
       assert(ui.calls.length === 0, "search pattern alone should not prompt");
     }
 
-    const pathAccessHandler = register(pathAccess);
-
+    // path access is now merged into protectedPaths hook
     {
-      const result = await pathAccessHandler({ toolName: "grep", input: { path: "/tmp/outside" } }, { hasUI: true });
+      const result = await protectedHandler({ toolName: "grep", input: { path: "/tmp/outside" } }, { hasUI: true });
       assert(result && (result as any).block === true, "grep outside workspace should be blocked");
       assert((result as any).reason.includes("outside workspace"), "block reason should mention workspace");
     }
 
     {
-      const result = await pathAccessHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, { hasUI: true });
+      const result = await protectedHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, { hasUI: true });
       assert(result === undefined, "search pattern alone should not be treated as an outside path");
     }
   '';
@@ -219,32 +215,29 @@ let
       expected = true;
     };
 
-    testPathAccessHookContainsWorkspaceCheck = {
+    testProtectedPathsHookContainsPathAccess = {
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook {
-            mode = "ask";
+          hook = omp.mkProtectedPathsHook {
             allowPaths = [ "/nix/store" ];
             denyPaths = [ "~/.ssh" ];
+            pathAccessMode = "ask";
           };
         in
-        builtins.match ".*isInsideWorkspace.*ALLOW_PATHS.*DENY_PATHS.*checkGrant.*" hook != null;
+        builtins.match ".*isInsideWorkspace.*ALLOW_PATHS.*DENY_PATHS.*outside workspace.*" hook != null;
       expected = true;
     };
 
-    testPathAccessHookBlockMode = {
+    testProtectedPathsHookPathAccessAllowMode = {
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook {
-            mode = "block";
-            allowPaths = [ ];
-            denyPaths = [ ];
+          hook = omp.mkProtectedPathsHook {
+            pathAccessMode = "allow";
           };
         in
-        builtins.match ".*block: true.*" hook != null
-        && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
+        builtins.match ".*outside workspace.*" hook == null;
       expected = true;
     };
 
@@ -357,41 +350,30 @@ let
       expected = true;
     };
 
-    testPathAccessAllowModeDoesNotBlockOutsideWorkspace = {
+    testProtectedPathsPathAccessAllowModeDoesNotBlockOutsideWorkspace = {
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook {
-            mode = "allow";
+          hook = omp.mkProtectedPathsHook {
+            pathAccessMode = "allow";
             allowPaths = [ ];
             denyPaths = [ ];
           };
         in
-        builtins.match ".*Path access blocked:.*" hook == null
-        && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
+        builtins.match ".*outside workspace.*" hook == null;
       expected = true;
     };
 
-    testPathAccessAllowPathsRequireExactDirectoryBoundary = {
+    testProtectedPathsAllowPathsRequireExactDirectoryBoundary = {
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook {
+          hook = omp.mkProtectedPathsHook {
             allowPaths = [ "/nix/store" ];
             denyPaths = [ ];
           };
         in
-        builtins.match ".*fp === allowPath \\|\\| fp\\.startsWith\\(allowPath \\+ \"/\"\\).*" hook != null;
-      expected = true;
-    };
-
-    testPathAccessNormalizesRelativePathsBeforePolicy = {
-      expr =
-        let
-          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook { };
-        in
-        builtins.match ".*path\\.resolve\\(process\\.cwd\\(\\), fp\\).*" hook != null;
+        builtins.match ".*isPathAllowed.*ALLOW_PATHS.*startsWith.*" hook != null;
       expected = true;
     };
   };

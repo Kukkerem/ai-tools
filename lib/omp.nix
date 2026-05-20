@@ -461,6 +461,9 @@ let
       globs ? defaultProtectedPathGlobs,
       extraGlobs ? [ ],
       protectReads ? true,
+      allowPaths ? defaultPathAccessAllowPaths,
+      denyPaths ? defaultPathAccessDenyPaths,
+      pathAccessMode ? "ask",
       mode ? "ask",
       ...
     }:
@@ -477,6 +480,7 @@ let
           '';
       modeAsk = mode == "ask";
       reasonPrefix = if protectReads then "Protected path: accessing " else "Protected path: writing to ";
+      pathAccessBlock = pathAccessMode == "block";
     in
     ''
       ${lib.optionalString modeAsk (mkGrantsHelper {
@@ -486,6 +490,8 @@ let
       var path = require("path")
 
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
+      const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
+      const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
 
       function escapeRegExp(s: string): string {
         return s.replace(/[|\\{}()[\]^$+?.]/g, "\\$&")
@@ -533,6 +539,30 @@ let
         return false
       }
 
+      function isInsideWorkspace(absFp: string): boolean {
+        if (!absFp) return true
+        var cwd = path.resolve(process.cwd())
+        return absFp === cwd || absFp.startsWith(cwd + "/")
+      }
+
+      function isPathAllowed(absFp: string): boolean {
+        for (var i = 0; i < ALLOW_PATHS.length; i++) {
+          var ap = path.resolve(process.cwd(), ALLOW_PATHS[i])
+          if (absFp === ap || absFp.startsWith(ap + "/")) return true
+        }
+        return false
+      }
+
+      function isPathDenied(absFp: string): boolean {
+        for (var i = 0; i < DENY_PATHS.length; i++) {
+          var d = DENY_PATHS[i]
+          if (d.startsWith("~")) d = (process.env.HOME || "") + d.slice(1)
+          d = path.resolve(d)
+          if (absFp === d || absFp.startsWith(d + "/")) return true
+        }
+        return false
+      }
+
       export default (pi) => {
         pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
           ${readToolGuard}
@@ -541,6 +571,8 @@ let
           if (!rawFp) return
 
           const fp = normalizeToolPath(rawFp)
+
+          // 1. Protected globs — ask or block
           if (matchesProtected(fp)) {
       ${
         if modeAsk then
@@ -565,6 +597,27 @@ let
           ''
       }
           }
+
+      ${lib.optionalString (pathAccessMode != "allow") ''
+        // 2. Deny list — always blocks
+        var absFp = rawFp
+        if (absFp.startsWith("~")) absFp = (process.env.HOME || "") + absFp.slice(1)
+        if (absFp.startsWith("/")) {
+          absFp = path.resolve(absFp)
+          if (isPathDenied(absFp)) {
+            return { block: true, reason: "Path access denied: " + absFp + " is in the deny list" }
+          }
+          if (isPathAllowed(absFp)) return
+          if (isInsideWorkspace(absFp)) return
+          // Outside workspace
+          ${
+            if pathAccessBlock then
+              ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }''
+            else
+              ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace. Add to allowPaths or grants.json to permit." }''
+          }
+        }
+      ''}
         })
       }
     '';
@@ -636,142 +689,9 @@ let
     "~/.gnupg"
   ];
 
-  mkPathAccessHook =
-    {
-      allowPaths ? defaultPathAccessAllowPaths,
-      denyPaths ? defaultPathAccessDenyPaths,
-      protectedGlobs ? defaultProtectedPathGlobs,
-      mode ? "ask",
-      ...
-    }:
-    let
-      modeAsk = mode == "ask";
-      modeBlock = mode == "block";
-    in
-    ''
-      ${mkGrantsHelper { grantNamespace = "pathAccess"; }}
-
-      var path = require("path")
-
-      const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
-      const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
-      const PROTECTED_GLOBS: string[] = ${builtins.toJSON protectedGlobs}
-      function expandHome(fp: string): string {
-        if (fp === "~") return process.env.HOME || fp
-        if (fp.startsWith("~/")) return (process.env.HOME || "") + fp.slice(1)
-        return fp
-      }
-
-      function normalizePath(fp: string): string {
-        var expanded = expandHome(fp)
-        if (!expanded.startsWith("/")) return path.resolve(process.cwd(), fp)
-        return path.resolve(expanded)
-      }
-
-      function isInsideWorkspace(fp: string): boolean {
-        if (!fp) return true
-        var cwd = path.resolve(process.cwd())
-        return fp === cwd || fp.startsWith(cwd + "/")
-      }
-
-      function isPathAllowed(fp: string): boolean {
-        for (var i = 0; i < ALLOW_PATHS.length; i++) {
-          var allowPath = normalizePath(ALLOW_PATHS[i])
-          if (fp === allowPath || fp.startsWith(allowPath + "/")) return true
-        }
-        return false
-      }
-
-      function isPathDenied(fp: string): boolean {
-        for (var i = 0; i < DENY_PATHS.length; i++) {
-          var d = normalizePath(DENY_PATHS[i])
-          if (fp === d || fp.startsWith(d + "/")) return true
-        }
-        return false
-      }
-
-      function getToolPath(call): string {
-        if (call.toolName === "search" || call.toolName === "grep") {
-          return String(call.input?.path ?? call.input?.directory ?? "")
-        }
-        return String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? "")
-      }
-
-      function matchesProtectedGlob(fp: string): boolean {
-        // Normalize to relative path for glob matching
-        var cwd = path.resolve(process.cwd())
-        var rel = fp
-        if (fp === cwd) return false
-        if (fp.startsWith(cwd + "/")) rel = fp.slice(cwd.length + 1)
-        for (var i = 0; i < PROTECTED_GLOBS.length; i++) {
-          var glob = PROTECTED_GLOBS[i]
-          if (glob.endsWith("/**")) {
-            var prefix = glob.slice(0, -3)
-            if (rel === prefix || rel.startsWith(prefix + "/")) return true
-            // Also match absolute paths outside workspace (e.g. /home/user/.omp)
-            if (fp.endsWith("/" + prefix) || fp.includes("/" + prefix + "/")) return true
-          } else if (glob.includes("*")) {
-            var base = rel.split("/").pop() || rel
-            var regex = new RegExp("^" + glob.replace(/[|\\{}()[\]^$+?.]/g, "\\$&").replace(/\*/g, "[^/]*") + "$")
-            if (regex.test(base)) return true
-          } else {
-            if (rel === glob) return true
-            var base2 = rel.split("/").pop() || rel
-            if (base2 === glob) return true
-          }
-        }
-        return false
-      }
-
-      const PATH_TOOLS = new Set(["read", "write", "edit", "find", "search", "grep", "filesystem_read_file", "filesystem_write_file", "filesystem_list_directory"])
-
-      export default function (pi) {
-        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
-          if (!PATH_TOOLS.has(call.toolName)) return
-
-          var fp = getToolPath(call)
-          if (!fp) return
-
-          fp = normalizePath(fp)
-
-          // Check deny list first — always blocks
-          if (isPathDenied(fp)) {
-            return { block: true, reason: "Path access denied: " + fp + " is in the deny list" }
-          }
-
-          // Protected glob — block synchronously (protectedPaths handles ask-mode prompt)
-          if (matchesProtectedGlob(fp)) return { block: true, reason: "Protected path: " + fp + " is blocked" }
-
-          // Check allow list — skip workspace check
-          if (isPathAllowed(fp)) return
-
-          // Check if inside workspace
-          if (isInsideWorkspace(fp)) return
-
-          // Outside workspace — check grants
-          var grant = checkGrant(fp)
-          if (grant) return
-
-      ${
-        if modeAsk then
-          ''
-            return { block: true, reason: "Path access blocked: " + fp + " is outside workspace. Add to allowPaths or grants.json to permit." }
-          ''
-        else if modeBlock then
-          ''
-            return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
-          ''
-        else
-          ""
-      }
-        })
-      }
-    '';
-
   hooks = {
     permissionGate = mkPermissionGateHook { };
     protectedPaths = mkProtectedPathsHook { };
-    pathAccess = mkPathAccessHook { };
   };
 
   mkYamlConfig =
@@ -807,7 +727,6 @@ in
     defaultPathAccessDenyPaths
     hooks
     mkGrantsHelper
-    mkPathAccessHook
     mkPermissionGateHook
     mkProtectedPathsHook
     mkOmpConfig
