@@ -113,17 +113,14 @@ let
     const pathAccessHandler = register(pathAccess);
 
     {
-      const ui = uiRecorder("Allow once");
-      const result = await pathAccessHandler({ toolName: "grep", input: { path: "/tmp/outside" } }, ui.ctx);
-      assert(result === undefined, "grep outside workspace should be allowed once after prompt");
-      assert(ui.calls.length === 1, "grep outside workspace should prompt");
+      const result = await pathAccessHandler({ toolName: "grep", input: { path: "/tmp/outside" } }, { hasUI: true });
+      assert(result && (result as any).block === true, "grep outside workspace should be blocked");
+      assert((result as any).reason.includes("outside workspace"), "block reason should mention workspace");
     }
 
     {
-      const ui = uiRecorder("Allow once");
-      const result = await pathAccessHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, ui.ctx);
+      const result = await pathAccessHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, { hasUI: true });
       assert(result === undefined, "search pattern alone should not be treated as an outside path");
-      assert(ui.calls.length === 0, "search pattern alone should not prompt for path access");
     }
   '';
 
@@ -247,7 +244,7 @@ let
           };
         in
         builtins.match ".*block: true.*" hook != null
-        && builtins.match ".*ctx\\.ui\\.confirm.*" hook == null;
+        && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
       expected = true;
     };
 
