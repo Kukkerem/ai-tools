@@ -708,6 +708,8 @@ let
           if (glob.endsWith("/**")) {
             var prefix = glob.slice(0, -3)
             if (rel === prefix || rel.startsWith(prefix + "/")) return true
+            // Also match absolute paths outside workspace (e.g. /home/user/.omp)
+            if (fp.endsWith("/" + prefix) || fp.includes("/" + prefix + "/")) return true
           } else if (glob.includes("*")) {
             var base = rel.split("/").pop() || rel
             var regex = new RegExp("^" + glob.replace(/[|\\{}()[\]^$+?.]/g, "\\$&").replace(/\*/g, "[^/]*") + "$")
