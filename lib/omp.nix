@@ -337,10 +337,21 @@ let
     {
       globs ? defaultProtectedPathGlobs,
       extraGlobs ? [ ],
+      protectReads ? true,
       ...
     }:
     let
       allGlobs = globs ++ extraGlobs;
+      readToolGuard =
+        if protectReads then
+          ''
+            if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file" && call.toolName !== "read" && call.toolName !== "find" && call.toolName !== "search" && call.toolName !== "grep" && call.toolName !== "filesystem_read_file" && call.toolName !== "filesystem_list_directory") return
+          ''
+        else
+          ''
+            if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
+          '';
+      reasonPrefix = if protectReads then "Protected path: accessing " else "Protected path: writing to ";
     in
     ''
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
@@ -359,11 +370,11 @@ let
 
       export default (pi) => {
         pi.on("tool_call", (call, ctx) => {
-          if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
+          ${readToolGuard}
 
-          const fp = String(call.input?.filePath ?? call.input?.path ?? "")
+          const fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
           if (matchesProtected(fp)) {
-            return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }
+            return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
           }
         })
       }

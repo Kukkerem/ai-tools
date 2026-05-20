@@ -122,6 +122,26 @@ let
         builtins.match ".*block: true.*" hook != null && builtins.match ".*ctx\\.ui\\.confirm.*" hook == null;
       expected = true;
     };
+
+    testProtectedPathsProtectReadsIncludesReadTools = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkProtectedPathsHook { protectReads = true; };
+        in
+        builtins.match ".*call\\.toolName !== \"read\".*" hook != null;
+      expected = true;
+    };
+
+    testProtectedPathsNoReadProtectionExcludesReadTools = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkProtectedPathsHook { protectReads = false; };
+        in
+        builtins.match ".*call\\.toolName !== \"read\".*" hook == null;
+      expected = true;
+    };
   };
 in
 assert failures == [ ];
