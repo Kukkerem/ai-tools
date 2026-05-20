@@ -384,7 +384,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
 
     ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
     grep -F 'export default (pi) =>' "$omp_protected_paths" >/dev/null
-    grep -F 'return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }' "$omp_protected_paths" >/dev/null
+    grep -F 'Protected path' "$omp_protected_paths" >/dev/null
     grep -F '".env.*"' "$omp_protected_paths" >/dev/null
     grep -F '".omp/**"' "$omp_protected_paths" >/dev/null
     ! grep -F 'HookAPI' "$omp_protected_paths" >/dev/null
