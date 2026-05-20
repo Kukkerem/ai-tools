@@ -93,6 +93,15 @@ let
         url = "https://docs.example.test/mcp";
       };
     };
+
+    testGrantsHelperContainsLoadAndSave = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+        in
+        builtins.match ".*loadGrants.*saveGrant.*sessionGrants.*" (omp.mkGrantsHelper { grantNamespace = "test"; }) != null;
+      expected = true;
+    };
   };
 in
 assert failures == [ ];

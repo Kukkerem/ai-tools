@@ -369,6 +369,64 @@ let
       }
     '';
 
+  mkGrantsHelper =
+    { grantNamespace }:
+    let
+      grantsFile = "agent/extensions/grants.json";
+    in
+    ''
+      var sessionGrants: Record<string, string> = {}
+      var alwaysGrants: Record<string, string> = {}
+
+      function loadGrants(): void {
+        try {
+          var fs = require("fs")
+          var path = require("path")
+          var configDir = process.env.PI_CONFIG_DIR || ".omp"
+          var grantsPath = path.join(configDir, "${grantsFile}")
+          if (fs.existsSync(grantsPath)) {
+            var data = JSON.parse(fs.readFileSync(grantsPath, "utf8"))
+            if (data && typeof data === "object") {
+              alwaysGrants = data["${grantNamespace}"] || {}
+            }
+          }
+        } catch (_) {
+          // grants file missing or invalid — start empty
+        }
+      }
+
+      function saveGrant(key: string, scope: string): void {
+        if (scope === "always") {
+          alwaysGrants[key] = "always"
+          try {
+            var fs = require("fs")
+            var path = require("path")
+            var configDir = process.env.PI_CONFIG_DIR || ".omp"
+            var grantsPath = path.join(configDir, "${grantsFile}")
+            var existing: Record<string, any> = {}
+            if (fs.existsSync(grantsPath)) {
+              existing = JSON.parse(fs.readFileSync(grantsPath, "utf8"))
+            }
+            existing["${grantNamespace}"] = alwaysGrants
+            fs.mkdirSync(path.dirname(grantsPath), { recursive: true })
+            fs.writeFileSync(grantsPath, JSON.stringify(existing, null, 2) + "\n")
+          } catch (_) {
+            // best effort — don't break the hook if save fails
+          }
+        } else if (scope === "session") {
+          sessionGrants[key] = "session"
+        }
+      }
+
+      function checkGrant(key: string): string | null {
+        if (sessionGrants[key]) return sessionGrants[key]
+        if (alwaysGrants[key]) return alwaysGrants[key]
+        return null
+      }
+
+      loadGrants()
+    '';
+
   hooks = {
     permissionGate = mkPermissionGateHook { };
     protectedPaths = mkProtectedPathsHook { };
@@ -404,6 +462,7 @@ in
     defaultPermissionGateBlockedPatterns
     defaultProtectedPathGlobs
     hooks
+    mkGrantsHelper
     mkPermissionGateHook
     mkProtectedPathsHook
     mkOmpConfig
