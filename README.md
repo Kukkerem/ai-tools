@@ -217,9 +217,10 @@ programs.ai-tools.tools.omp = {
 
   hooks = {
     permissionGate = {
-      enable = true;   # ask-mode by default — prompts for confirmation before running dangerous commands
-      # mode = "block"; # uncomment to hard-block instead of asking
-      # Keep defaults and append more gates.
+      enable = true;        # default: true
+      mode = "ask";         # "ask" prompts; "block" denies without prompting
+      # Defaults include destructive shell patterns plus publish/deploy/delete
+      # commands for git, Docker, Terraform, Kubernetes, AWS, GCP, dbt, and npm/yarn/pnpm.
       extraBlockedCommands = [ "systemctl" ];
       extraBlockedPatterns = [
         {
@@ -227,11 +228,25 @@ programs.ai-tools.tools.omp = {
           flags = "";
         }
       ];
+      # To replace the defaults instead of appending:
+      # blockedCommands = [ "reboot" ];
+      # blockedPatterns = [ ];
     };
     protectedPaths = {
-      enable = true;   # blocks writes to .env, .git/, node_modules/
-      # Keep defaults and append more protected paths.
+      enable = true;        # default: true
+      mode = "ask";         # "ask" prompts; "block" denies without prompting
+      protectReads = true;  # also ask/block on read/find/search, not just writes
+      # Defaults include .env, .env.*, .git/**, node_modules/**, .direnv/**,
+      # .devenv/**, and .omp/**. Append more protected paths:
       extraGlobs = [ "secrets/**" ];
+      # To replace the defaults instead of appending:
+      # globs = [ "secrets/**" ];
+    };
+    pathAccess = {
+      enable = true;        # default: true
+      mode = "ask";         # "ask", "block", or "allow"
+      allowPaths = [ "/nix/store" ];
+      denyPaths = [ "~/.ssh" "~/.gnupg" ];
     };
     custom.audit-log = ''
       export default function (pi) {
@@ -259,6 +274,8 @@ programs.ai-tools.tools.omp = {
   };
 };
 ```
+
+Default guardrail lists are defined in [`lib/omp.nix`](./lib/omp.nix): `defaultPermissionGateBlockedPatterns` / `defaultPermissionGateBlockedCommands`, `defaultProtectedPathGlobs`, and `defaultPathAccessAllowPaths` / `defaultPathAccessDenyPaths`.
 
 **Note:** omp's `agent.db` (OAuth tokens set via `/login`) is not Nix-managed. Run `/login` once per profile after initial setup.
 

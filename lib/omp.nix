@@ -242,6 +242,106 @@ let
       pattern = "\\bgit\\s+push\\b";
       flags = "";
     }
+    {
+      pattern = "\\bbrew\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+inspect\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+apply\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+destroy\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+delete\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+system\\s+prune\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bnpm\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\byarn\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bpnpm\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bDROP\\s+DATABASE\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bDROP\\s+TABLE\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdbt\\s+run\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdbt\\s+seed\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+s3\\s+rm\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+iam\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+ec2\\s+terminate-instances\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+apply\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+scale\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+rm\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+rmi\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+compose\\s+down\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+import\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+compute\\s+instances\\s+delete\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+iam\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+sql\\s+instances\\s+delete\\b";
+      flags = "i";
+    }
   ];
 
   defaultPermissionGateBlockedCommands = [
@@ -283,91 +383,321 @@ let
       modeAsk = mode == "ask";
     in
     ''
-            var BLOCKED_PATTERNS = [
+      ${lib.optionalString modeAsk (mkGrantsHelper {
+        grantNamespace = "permissionGate";
+      })}
+
+      var BLOCKED_PATTERNS = [
       ${mkRegExpEntries allBlockedPatterns}
-            ]
+      ]
 
-            var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
+      var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
 
-            export default function (pi) {
-              pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
-                if (call.toolName !== "bash" && call.toolName !== "shell") return
+      export default function (pi) {
+        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
+          if (call.toolName !== "bash" && call.toolName !== "shell") return
 
-                var command = String(call.input?.command ?? "")
-                if (!command) return
+          var command = String(call.input?.command ?? "")
+          if (!command) return
 
-                for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
-                  if (BLOCKED_PATTERNS[i].test(command)) {
+          for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
+            if (BLOCKED_PATTERNS[i].test(command)) {
       ${
         if modeAsk then
           ''
+            var grant = checkGrant(command)
+            if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
-            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + " may be dangerous.\nProceed?")
-            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
-            return
+            var choice = await ctx.ui.select("Permission Gate: " + command + " may be dangerous.", [
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
+            ])
+            if (!choice || choice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (choice === "Allow once") return
+            var scope = choice === "Always allow" ? "always" : "session"
+            saveGrant(command, scope)
           ''
         else
           ''
             return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
           ''
       }
-                  }
-                }
+            }
+          }
 
-                var firstWord = command.trim().split(/\s+/)[0] ?? ""
-                if (BLOCKED_COMMANDS.includes(firstWord)) {
+          var firstWord = command.trim().split(/\s+/)[0] ?? ""
+          if (BLOCKED_COMMANDS.includes(firstWord)) {
       ${
         if modeAsk then
           ''
+            var cmdGrant = checkGrant(firstWord)
+            if (cmdGrant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + "\n\n" + firstWord + " is not allowed.\nProceed?")
-            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
+            var cmdChoice = await ctx.ui.select("Permission Gate: " + firstWord + " is not allowed. Command: " + command, [
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
+            ])
+            if (!cmdChoice || cmdChoice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (cmdChoice === "Allow once") return
+            var cmdScope = cmdChoice === "Always allow" ? "always" : "session"
+            saveGrant(firstWord, cmdScope)
           ''
         else
           ''
             return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
           ''
       }
-                }
-              })
-            }
+          }
+        })
+      }
     '';
 
   mkProtectedPathsHook =
     {
       globs ? defaultProtectedPathGlobs,
       extraGlobs ? [ ],
+      protectReads ? true,
+      allowPaths ? defaultPathAccessAllowPaths,
+      denyPaths ? defaultPathAccessDenyPaths,
+      pathAccessMode ? "ask",
+      mode ? "ask",
       ...
     }:
     let
       allGlobs = globs ++ extraGlobs;
+      readToolGuard =
+        if protectReads then
+          ''
+            if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file" && call.toolName !== "read" && call.toolName !== "find" && call.toolName !== "search" && call.toolName !== "grep" && call.toolName !== "filesystem_read_file" && call.toolName !== "filesystem_list_directory") return
+          ''
+        else
+          ''
+            if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
+          '';
+      modeAsk = mode == "ask";
+      reasonPrefix = if protectReads then "Protected path: accessing " else "Protected path: writing to ";
+      pathAccessBlock = pathAccessMode == "block";
     in
     ''
+      ${lib.optionalString modeAsk (mkGrantsHelper {
+        grantNamespace = "protectedPaths";
+      })}
+
+      var path = require("path")
+
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
+      const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
+      const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
+
+      function escapeRegExp(s: string): string {
+        return s.replace(/[|\\{}()[\]^$+?.]/g, "\\$&")
+      }
+
+      function matchesWildcard(fp: string, glob: string): boolean {
+        var parts = glob.split("*").map(escapeRegExp)
+        return new RegExp("^" + parts.join("[^/]*") + "$").test(fp)
+      }
+
+      function normalizeToolPath(fp: string): string {
+        var expanded = fp
+        if (expanded === "~") expanded = process.env.HOME || expanded
+        if (expanded.startsWith("~/")) expanded = (process.env.HOME || "") + expanded.slice(1)
+
+        var cwd = path.resolve(process.cwd())
+        var resolved = expanded.startsWith("/") ? path.resolve(expanded) : path.resolve(cwd, expanded)
+        if (resolved === cwd) return "."
+        if (resolved.startsWith(cwd + "/")) return resolved.slice(cwd.length + 1)
+        return resolved
+      }
+
+      function getToolPath(call): string {
+        if (call.toolName === "search" || call.toolName === "grep") {
+          return String(call.input?.path ?? call.input?.directory ?? "")
+        }
+        return String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? "")
+      }
 
       function matchesProtected(fp: string): boolean {
         for (const glob of PROTECTED_GLOBS) {
           if (glob.endsWith("/**")) {
             const prefix = glob.slice(0, -3)
             if (fp === prefix || fp.startsWith(prefix + "/")) return true
+            if (fp.endsWith("/" + prefix) || fp.includes("/" + prefix + "/")) return true
+          } else if (glob.includes("*")) {
+            if (matchesWildcard(fp, glob)) return true
+            var base = path.basename(fp)
+            if (base !== fp && matchesWildcard(base, glob)) return true
           } else {
             if (fp === glob) return true
+            if (path.basename(fp) === glob) return true
           }
         }
         return false
       }
 
-      export default (pi) => {
-        pi.on("tool_call", (call, ctx) => {
-          if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
+      function isInsideWorkspace(absFp: string): boolean {
+        if (!absFp) return true
+        var cwd = path.resolve(process.cwd())
+        return absFp === cwd || absFp.startsWith(cwd + "/")
+      }
 
-          const fp = String(call.input?.filePath ?? call.input?.path ?? "")
+      function isPathAllowed(absFp: string): boolean {
+        for (var i = 0; i < ALLOW_PATHS.length; i++) {
+          var ap = path.resolve(process.cwd(), ALLOW_PATHS[i])
+          if (absFp === ap || absFp.startsWith(ap + "/")) return true
+        }
+        return false
+      }
+
+      function isPathDenied(absFp: string): boolean {
+        for (var i = 0; i < DENY_PATHS.length; i++) {
+          var d = DENY_PATHS[i]
+          if (d.startsWith("~")) d = (process.env.HOME || "") + d.slice(1)
+          d = path.resolve(d)
+          if (absFp === d || absFp.startsWith(d + "/")) return true
+        }
+        return false
+      }
+
+      var _promptQueue: Promise<any> = Promise.resolve()
+
+      export default (pi) => {
+        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
+          ${readToolGuard}
+
+          const rawFp = getToolPath(call)
+          if (!rawFp) return
+
+          const fp = normalizeToolPath(rawFp)
+
+          // 1. Protected globs — ask or block
           if (matchesProtected(fp)) {
-            return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }
+      ${
+        if modeAsk then
+          ''
+            var grant = checkGrant(fp)
+            if (grant) return
+            if (!ctx.hasUI) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
+            return new Promise((resolve) => {
+              _promptQueue = _promptQueue.then(async () => {
+                // Re-check grants after queue — previous prompt may have granted
+                var g = checkGrant(fp)
+                if (g) { resolve(undefined); return }
+                var choice = await ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
+                  "Allow once",
+                  "Allow for session",
+                  "Always allow",
+                  "Deny"
+                ])
+                if (!choice || choice === "Deny") { resolve({ block: true, reason: "Protected path: user denied " + fp }); return }
+                if (choice === "Allow once") { resolve(undefined); return }
+                var scope = choice === "Always allow" ? "always" : "session"
+                saveGrant(fp, scope)
+                resolve(undefined)
+              })
+            })
+          ''
+        else
+          ''
+            return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
+          ''
+      }
           }
+
+      ${lib.optionalString (pathAccessMode != "allow") ''
+        // 2. Deny list — always blocks
+        var absFp = rawFp
+        if (absFp.startsWith("~")) absFp = (process.env.HOME || "") + absFp.slice(1)
+        if (absFp.startsWith("/")) {
+          absFp = path.resolve(absFp)
+          if (isPathDenied(absFp)) {
+            return { block: true, reason: "Path access denied: " + absFp + " is in the deny list" }
+          }
+          if (isPathAllowed(absFp)) return
+          if (isInsideWorkspace(absFp)) return
+          // Outside workspace
+          ${
+            if pathAccessBlock then
+              ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }''
+            else
+              ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace. Add to allowPaths or grants.json to permit." }''
+          }
+        }
+      ''}
         })
       }
     '';
+
+  mkGrantsHelper =
+    { grantNamespace }:
+    let
+      grantsFile = "agent/extensions/grants.json";
+    in
+    ''
+      var sessionGrants: Record<string, string> = {}
+      var alwaysGrants: Record<string, string> = {}
+
+      function loadGrants(): void {
+        try {
+          var fs = require("fs")
+          var path = require("path")
+          var configDir = process.env.PI_CONFIG_DIR || ".omp"
+          var grantsPath = path.join(configDir, "${grantsFile}")
+          if (fs.existsSync(grantsPath)) {
+            var data = JSON.parse(fs.readFileSync(grantsPath, "utf8"))
+            if (data && typeof data === "object") {
+              alwaysGrants = data["${grantNamespace}"] || {}
+            }
+          }
+        } catch (_) {
+          // grants file missing or invalid — start empty
+        }
+      }
+
+      function saveGrant(key: string, scope: string): void {
+        if (scope === "always") {
+          alwaysGrants[key] = "always"
+          try {
+            var fs = require("fs")
+            var path = require("path")
+            var configDir = process.env.PI_CONFIG_DIR || ".omp"
+            var grantsPath = path.join(configDir, "${grantsFile}")
+            var existing: Record<string, any> = {}
+            if (fs.existsSync(grantsPath)) {
+              existing = JSON.parse(fs.readFileSync(grantsPath, "utf8"))
+            }
+            existing["${grantNamespace}"] = alwaysGrants
+            fs.mkdirSync(path.dirname(grantsPath), { recursive: true })
+            fs.writeFileSync(grantsPath, JSON.stringify(existing, null, 2) + "\n")
+          } catch (_) {
+            // best effort — don't break the hook if save fails
+          }
+        } else if (scope === "session") {
+          sessionGrants[key] = "session"
+        }
+      }
+
+      function checkGrant(key: string): string | null {
+        if (sessionGrants[key]) return sessionGrants[key]
+        if (alwaysGrants[key]) return alwaysGrants[key]
+        return null
+      }
+
+      loadGrants()
+    '';
+
+  defaultPathAccessAllowPaths = [
+    "/nix/store"
+  ];
+
+  defaultPathAccessDenyPaths = [
+    "~/.ssh"
+    "~/.gnupg"
+  ];
 
   hooks = {
     permissionGate = mkPermissionGateHook { };
@@ -403,7 +733,10 @@ in
     defaultPermissionGateBlockedCommands
     defaultPermissionGateBlockedPatterns
     defaultProtectedPathGlobs
+    defaultPathAccessAllowPaths
+    defaultPathAccessDenyPaths
     hooks
+    mkGrantsHelper
     mkPermissionGateHook
     mkProtectedPathsHook
     mkOmpConfig

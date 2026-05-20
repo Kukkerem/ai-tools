@@ -338,6 +338,7 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -x "$omp_wrapper"
     test -f "$omp_perm_gate"
     test -f "$omp_protected_paths"
+
     test -f "$omp_agent_browser_reference"
     test -f "$omp_caveman_compress_script"
     test -f "$omp_tdd_skill"
@@ -380,7 +381,9 @@ pkgs.runCommand "ai-tools-home-manager-tests"
 
     ! grep -F 'from "@oh-my-pi/pi-coding-agent"' "$omp_protected_paths" >/dev/null
     grep -F 'export default (pi) =>' "$omp_protected_paths" >/dev/null
-    grep -F 'return { block: true, reason: "Protected path: writing to " + fp + " is blocked" }' "$omp_protected_paths" >/dev/null
+    grep -F 'Protected path' "$omp_protected_paths" >/dev/null
+
+    grep -F 'outside workspace' "$omp_protected_paths" >/dev/null
     grep -F '".env.*"' "$omp_protected_paths" >/dev/null
     grep -F '".omp/**"' "$omp_protected_paths" >/dev/null
     ! grep -F 'HookAPI' "$omp_protected_paths" >/dev/null
