@@ -283,54 +283,73 @@ let
       modeAsk = mode == "ask";
     in
     ''
-            var BLOCKED_PATTERNS = [
+      ${lib.optionalString modeAsk (mkGrantsHelper { grantNamespace = "permissionGate"; })}
+
+      var BLOCKED_PATTERNS = [
       ${mkRegExpEntries allBlockedPatterns}
-            ]
+      ]
 
-            var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
+      var BLOCKED_COMMANDS = ${builtins.toJSON allBlockedCommands}
 
-            export default function (pi) {
-              pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
-                if (call.toolName !== "bash" && call.toolName !== "shell") return
+      export default function (pi) {
+        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
+          if (call.toolName !== "bash" && call.toolName !== "shell") return
 
-                var command = String(call.input?.command ?? "")
-                if (!command) return
+          var command = String(call.input?.command ?? "")
+          if (!command) return
 
-                for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
-                  if (BLOCKED_PATTERNS[i].test(command)) {
+          for (var i = 0; i < BLOCKED_PATTERNS.length; i++) {
+            if (BLOCKED_PATTERNS[i].test(command)) {
       ${
         if modeAsk then
           ''
-            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
-            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + " may be dangerous.\nProceed?")
-            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
-            return
+              if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+              var grant = checkGrant(command)
+              if (grant) return
+              var choice = await ctx.ui.select("Permission Gate", "Command: " + command + " may be dangerous.", [
+                { label: "Allow once", value: "once" },
+                { label: "Allow for session", value: "session" },
+                { label: "Always allow", value: "always" },
+                { label: "Deny", value: "deny" }
+              ])
+              if (!choice || choice === "deny") return { block: true, reason: "Permission gate: user denied command" }
+              if (choice === "once") return
+              saveGrant(command, choice)
           ''
         else
           ''
-            return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+              return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
           ''
       }
-                  }
-                }
-
-                var firstWord = command.trim().split(/\s+/)[0] ?? ""
-                if (BLOCKED_COMMANDS.includes(firstWord)) {
-      ${
-        if modeAsk then
-          ''
-            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-            var ok = await ctx.ui.confirm("Permission Gate", "Command: " + command + "\n\n" + firstWord + " is not allowed.\nProceed?")
-            if (!ok) return { block: true, reason: "Permission gate: user denied command" }
-          ''
-        else
-          ''
-            return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-          ''
-      }
-                }
-              })
             }
+          }
+
+          var firstWord = command.trim().split(/\s+/)[0] ?? ""
+          if (BLOCKED_COMMANDS.includes(firstWord)) {
+      ${
+        if modeAsk then
+          ''
+              if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+              var cmdGrant = checkGrant(firstWord)
+              if (cmdGrant) return
+              var cmdChoice = await ctx.ui.select("Permission Gate", firstWord + " is not allowed.\nCommand: " + command, [
+                { label: "Allow once", value: "once" },
+                { label: "Allow for session", value: "session" },
+                { label: "Always allow", value: "always" },
+                { label: "Deny", value: "deny" }
+              ])
+              if (!cmdChoice || cmdChoice === "deny") return { block: true, reason: "Permission gate: user denied command" }
+              if (cmdChoice === "once") return
+              saveGrant(firstWord, cmdChoice)
+          ''
+        else
+          ''
+              return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+          ''
+      }
+          }
+        })
+      }
     '';
 
   mkProtectedPathsHook =

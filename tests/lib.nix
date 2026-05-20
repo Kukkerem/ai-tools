@@ -153,6 +153,26 @@ let
         builtins.match ".*call\\.toolName !== \"read\".*" hook == null;
       expected = true;
     };
+
+    testPermissionGateAskModeHasSessionGrants = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPermissionGateHook { mode = "ask"; };
+        in
+        builtins.match ".*saveGrant.*checkGrant.*Allow for session.*Always allow.*" hook != null;
+      expected = true;
+    };
+
+    testPermissionGateBlockModeNoGrants = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPermissionGateHook { mode = "block"; };
+        in
+        builtins.match ".*saveGrant.*" hook != null;
+      expected = false;
+    };
   };
 in
 assert failures == [ ];
