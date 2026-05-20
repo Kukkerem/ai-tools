@@ -118,6 +118,15 @@ let
       const result = await protectedHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, { hasUI: true });
       assert(result === undefined, "search pattern alone should not be treated as an outside path");
     }
+
+    // Concurrent tool_calls must serialize their prompts
+    {
+      const call1 = protectedHandler({ toolName: "read", input: { path: ".env" } }, uiRecorder("Allow for session").ctx);
+      const call2 = protectedHandler({ toolName: "read", input: { path: ".env" } }, uiRecorder("Deny").ctx);
+      const [r1, r2] = await Promise.all([call1, call2]);
+      assert(r1 === undefined, "first call should be allowed for session");
+      assert(r2 === undefined, "second call should auto-allow via session grant, no second prompt needed");
+    }
   '';
 
   failures = lib.debug.runTests {

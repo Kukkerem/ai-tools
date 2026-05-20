@@ -563,6 +563,8 @@ let
         return false
       }
 
+      var _promptQueue: Promise<any> = Promise.resolve()
+
       export default (pi) => {
         pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
           ${readToolGuard}
@@ -580,16 +582,24 @@ let
             var grant = checkGrant(fp)
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
-            var choice = await ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
-              "Allow once",
-              "Allow for session",
-              "Always allow",
-              "Deny"
-            ])
-            if (!choice || choice === "Deny") return { block: true, reason: "Protected path: user denied " + fp }
-            if (choice === "Allow once") return
-            var scope = choice === "Always allow" ? "always" : "session"
-            saveGrant(fp, scope)
+            return new Promise((resolve) => {
+              _promptQueue = _promptQueue.then(async () => {
+                // Re-check grants after queue — previous prompt may have granted
+                var g = checkGrant(fp)
+                if (g) { resolve(undefined); return }
+                var choice = await ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
+                  "Allow once",
+                  "Allow for session",
+                  "Always allow",
+                  "Deny"
+                ])
+                if (!choice || choice === "Deny") { resolve({ block: true, reason: "Protected path: user denied " + fp }); return }
+                if (choice === "Allow once") { resolve(undefined); return }
+                var scope = choice === "Always allow" ? "always" : "session"
+                saveGrant(fp, scope)
+                resolve(undefined)
+              })
+            })
           ''
         else
           ''
