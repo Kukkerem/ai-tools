@@ -408,7 +408,7 @@ let
             var grant = checkGrant(command)
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
-            var choice = await ctx.ui.select("Permission Gate", "Command: " + command + " may be dangerous.", [
+            var choice = await ctx.ui.select("Permission Gate: " + command + " may be dangerous.", [
               { label: "Allow once", value: "once" },
               { label: "Allow for session", value: "session" },
               { label: "Always allow", value: "always" },
@@ -434,7 +434,7 @@ let
             var cmdGrant = checkGrant(firstWord)
             if (cmdGrant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-            var cmdChoice = await ctx.ui.select("Permission Gate", firstWord + " is not allowed.\nCommand: " + command, [
+            var cmdChoice = await ctx.ui.select("Permission Gate: " + firstWord + " is not allowed. Command: " + command, [
               { label: "Allow once", value: "once" },
               { label: "Allow for session", value: "session" },
               { label: "Always allow", value: "always" },
@@ -677,7 +677,7 @@ let
         if modeAsk then
           ''
             if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
-            var choice = await ctx.ui.select("Path Access", fp + " is outside the workspace. Allow access?", [
+            var choice = await ctx.ui.select("Path Access: " + fp + " is outside the workspace.", [
               { label: "Allow once", value: "once" },
               { label: "Allow for session", value: "session" },
               { label: "Always allow", value: "always" },
