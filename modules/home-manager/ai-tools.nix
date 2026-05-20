@@ -931,6 +931,7 @@ let
         globs = cfg.tools.omp.hooks.protectedPaths.globs;
         extraGlobs = cfg.tools.omp.hooks.protectedPaths.extraGlobs;
         protectReads = cfg.tools.omp.hooks.protectedPaths.protectReads;
+        mode = cfg.tools.omp.hooks.protectedPaths.mode;
       };
       pathAccess = {
         enable = cfg.tools.omp.hooks.pathAccess.enable;
@@ -1865,6 +1866,19 @@ in
                 (read, find, search, grep) on protected paths, not just writes.
               '';
             };
+
+            mode = mkOption {
+              type = types.enum [
+                "block"
+                "ask"
+              ];
+              default = "ask";
+              description = ''
+                Response mode for protected path matches:
+                - "block": Hard-block access to protected paths.
+                - "ask": Prompt for user confirmation with once/session/always choices.
+              '';
+            };
           };
 
           pathAccess = {
@@ -2147,6 +2161,17 @@ in
                         type = types.nullOr types.bool;
                         default = null;
                         description = "Per-profile protected paths read protection override.";
+                      };
+
+                      mode = mkOption {
+                        type = types.nullOr (
+                          types.enum [
+                            "block"
+                            "ask"
+                          ]
+                        );
+                        default = null;
+                        description = "Per-profile protected paths response mode override.";
                       };
                     };
 

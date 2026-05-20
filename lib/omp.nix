@@ -242,6 +242,106 @@ let
       pattern = "\\bgit\\s+push\\b";
       flags = "";
     }
+    {
+      pattern = "\\bbrew\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+inspect\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+apply\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+destroy\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+delete\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+system\\s+prune\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bnpm\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\byarn\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bpnpm\\s+publish\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bDROP\\s+DATABASE\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bDROP\\s+TABLE\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdbt\\s+run\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdbt\\s+seed\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+s3\\s+rm\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+iam\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\baws\\s+ec2\\s+terminate-instances\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+apply\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bkubectl\\s+scale\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+rm\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+rmi\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bdocker\\s+compose\\s+down\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bterraform\\s+import\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+compute\\s+instances\\s+delete\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+iam\\b";
+      flags = "i";
+    }
+    {
+      pattern = "\\bgcloud\\s+sql\\s+instances\\s+delete\\b";
+      flags = "i";
+    }
   ];
 
   defaultPermissionGateBlockedCommands = [
@@ -359,6 +459,7 @@ let
       globs ? defaultProtectedPathGlobs,
       extraGlobs ? [ ],
       protectReads ? true,
+      mode ? "ask",
       ...
     }:
     let
@@ -372,9 +473,14 @@ let
           ''
             if (call.toolName !== "write" && call.toolName !== "edit" && call.toolName !== "filesystem_write_file") return
           '';
+      modeAsk = mode == "ask";
       reasonPrefix = if protectReads then "Protected path: accessing " else "Protected path: writing to ";
     in
     ''
+      ${lib.optionalString modeAsk (mkGrantsHelper {
+        grantNamespace = "protectedPaths";
+      })}
+
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
 
       function matchesProtected(fp: string): boolean {
@@ -390,12 +496,32 @@ let
       }
 
       export default (pi) => {
-        pi.on("tool_call", (call, ctx) => {
+        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
           ${readToolGuard}
 
           const fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
           if (matchesProtected(fp)) {
+      ${
+        if modeAsk then
+          ''
+            var grant = checkGrant(fp)
+            if (grant) return
+            if (!ctx.hasUI) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
+            var choice = await ctx.ui.select("Protected Path", "${reasonPrefix}" + fp + " is blocked. Allow access?", [
+              { label: "Allow once", value: "once" },
+              { label: "Allow for session", value: "session" },
+              { label: "Always allow", value: "always" },
+              { label: "Deny", value: "deny" }
+            ])
+            if (!choice || choice === "deny") return { block: true, reason: "Protected path: user denied " + fp }
+            if (choice === "once") return
+            saveGrant(fp, choice)
+          ''
+        else
+          ''
             return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
+          ''
+      }
           }
         })
       }

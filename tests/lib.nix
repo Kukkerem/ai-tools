@@ -154,6 +154,64 @@ let
       expected = true;
     };
 
+    testProtectedPathsAskModePromptsWithGrants = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkProtectedPathsHook { mode = "ask"; };
+        in
+        builtins.match ".*checkGrant\\(fp\\).*ctx\\.ui\\.select.*Allow for session.*saveGrant\\(fp, choice\\).*" hook
+        != null;
+      expected = true;
+    };
+
+    testProtectedPathsBlockModeDoesNotPrompt = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkProtectedPathsHook { mode = "block"; };
+        in
+        builtins.match ".*block: true.*Protected path:.*" hook != null
+        && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
+      expected = true;
+    };
+
+    testPermissionGateDefaultsIncludePiGuardrailsCommands = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          patternTexts = map (pattern: pattern.pattern) omp.defaultPermissionGateBlockedPatterns;
+        in
+        lib.all (pattern: builtins.elem pattern patternTexts) [
+          "\\bbrew\\b"
+          "\\bdocker\\s+inspect\\b"
+          "\\bterraform\\s+apply\\b"
+          "\\bterraform\\s+destroy\\b"
+          "\\bkubectl\\s+delete\\b"
+          "\\bdocker\\s+system\\s+prune\\b"
+          "\\bnpm\\s+publish\\b"
+          "\\byarn\\s+publish\\b"
+          "\\bpnpm\\s+publish\\b"
+          "\\bDROP\\s+DATABASE\\b"
+          "\\bDROP\\s+TABLE\\b"
+          "\\bdbt\\s+run\\b"
+          "\\bdbt\\s+seed\\b"
+          "\\baws\\s+s3\\s+rm\\b"
+          "\\baws\\s+iam\\b"
+          "\\baws\\s+ec2\\s+terminate-instances\\b"
+          "\\bkubectl\\s+apply\\b"
+          "\\bkubectl\\s+scale\\b"
+          "\\bdocker\\s+rm\\b"
+          "\\bdocker\\s+rmi\\b"
+          "\\bdocker\\s+compose\\s+down\\b"
+          "\\bterraform\\s+import\\b"
+          "\\bgcloud\\s+compute\\s+instances\\s+delete\\b"
+          "\\bgcloud\\s+iam\\b"
+          "\\bgcloud\\s+sql\\s+instances\\s+delete\\b"
+        ];
+      expected = true;
+    };
+
     testPermissionGateAskModeHasSessionGrants = {
       expr =
         let
