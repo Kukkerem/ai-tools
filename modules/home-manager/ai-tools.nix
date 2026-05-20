@@ -1020,7 +1020,12 @@ let
 
         // lib.optionalAttrs (profile.hooks.pathAccess.enable or false) {
           "agent/extensions/path-access.ts" = {
-            text = ompSupport.mkPathAccessHook profile.hooks.pathAccess;
+            text = ompSupport.mkPathAccessHook (
+              profile.hooks.pathAccess
+              // {
+                protectedGlobs = profile.hooks.protectedPaths.globs or ompSupport.defaultProtectedPathGlobs;
+              }
+            );
           };
         }
         // lib.mapAttrs' (

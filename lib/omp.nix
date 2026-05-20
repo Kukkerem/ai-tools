@@ -640,6 +640,7 @@ let
     {
       allowPaths ? defaultPathAccessAllowPaths,
       denyPaths ? defaultPathAccessDenyPaths,
+      protectedGlobs ? defaultProtectedPathGlobs,
       mode ? "ask",
       ...
     }:
@@ -654,7 +655,7 @@ let
 
       const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
       const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
-
+      const PROTECTED_GLOBS: string[] = ${builtins.toJSON protectedGlobs}
       function expandHome(fp: string): string {
         if (fp === "~") return process.env.HOME || fp
         if (fp.startsWith("~/")) return (process.env.HOME || "") + fp.slice(1)
@@ -696,6 +697,30 @@ let
         return String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? "")
       }
 
+      function matchesProtectedGlob(fp: string): boolean {
+        // Normalize to relative path for glob matching
+        var cwd = path.resolve(process.cwd())
+        var rel = fp
+        if (fp === cwd) return false
+        if (fp.startsWith(cwd + "/")) rel = fp.slice(cwd.length + 1)
+        for (var i = 0; i < PROTECTED_GLOBS.length; i++) {
+          var glob = PROTECTED_GLOBS[i]
+          if (glob.endsWith("/**")) {
+            var prefix = glob.slice(0, -3)
+            if (rel === prefix || rel.startsWith(prefix + "/")) return true
+          } else if (glob.includes("*")) {
+            var base = rel.split("/").pop() || rel
+            var regex = new RegExp("^" + glob.replace(/[|\\{}()[\]^$+?.]/g, "\\$&").replace(/\*/g, "[^/]*") + "$")
+            if (regex.test(base)) return true
+          } else {
+            if (rel === glob) return true
+            var base2 = rel.split("/").pop() || rel
+            if (base2 === glob) return true
+          }
+        }
+        return false
+      }
+
       const PATH_TOOLS = new Set(["read", "write", "edit", "find", "search", "grep", "filesystem_read_file", "filesystem_write_file", "filesystem_list_directory"])
 
       export default function (pi) {
@@ -710,6 +735,11 @@ let
           // Check deny list first — always blocks
           if (isPathDenied(fp)) {
             return { block: true, reason: "Path access denied: " + fp + " is in the deny list" }
+          }
+
+          // Check protected globs — synchronous block to avoid racing with protectedPaths hook
+          if (matchesProtectedGlob(fp)) {
+            return { block: true, reason: "Protected path: " + fp + " is blocked" }
           }
 
           // Check allow list — skip workspace check
