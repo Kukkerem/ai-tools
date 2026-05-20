@@ -563,6 +563,7 @@ let
   hooks = {
     permissionGate = mkPermissionGateHook { };
     protectedPaths = mkProtectedPathsHook { };
+    pathAccess = mkPathAccessHook { };
   };
 
   mkYamlConfig =
