@@ -99,7 +99,9 @@ let
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
         in
-        builtins.match ".*loadGrants.*saveGrant.*sessionGrants.*" (omp.mkGrantsHelper { grantNamespace = "test"; }) != null;
+        builtins.match ".*loadGrants.*saveGrant.*sessionGrants.*" (
+          omp.mkGrantsHelper { grantNamespace = "test"; }
+        ) != null;
       expected = true;
     };
 
@@ -107,7 +109,11 @@ let
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook { mode = "ask"; allowPaths = [ "/nix/store" ]; denyPaths = [ "~/.ssh" ]; };
+          hook = omp.mkPathAccessHook {
+            mode = "ask";
+            allowPaths = [ "/nix/store" ];
+            denyPaths = [ "~/.ssh" ];
+          };
         in
         builtins.match ".*isInsideWorkspace.*ALLOW_PATHS.*DENY_PATHS.*checkGrant.*" hook != null;
       expected = true;
@@ -117,9 +123,14 @@ let
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkPathAccessHook { mode = "block"; allowPaths = []; denyPaths = []; };
+          hook = omp.mkPathAccessHook {
+            mode = "block";
+            allowPaths = [ ];
+            denyPaths = [ ];
+          };
         in
-        builtins.match ".*block: true.*" hook != null && builtins.match ".*ctx\\.ui\\.confirm.*" hook == null;
+        builtins.match ".*block: true.*" hook != null
+        && builtins.match ".*ctx\\.ui\\.confirm.*" hook == null;
       expected = true;
     };
 

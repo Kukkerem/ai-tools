@@ -930,6 +930,13 @@ let
         enable = cfg.tools.omp.hooks.protectedPaths.enable;
         globs = cfg.tools.omp.hooks.protectedPaths.globs;
         extraGlobs = cfg.tools.omp.hooks.protectedPaths.extraGlobs;
+        protectReads = cfg.tools.omp.hooks.protectedPaths.protectReads;
+      };
+      pathAccess = {
+        enable = cfg.tools.omp.hooks.pathAccess.enable;
+        mode = cfg.tools.omp.hooks.pathAccess.mode;
+        allowPaths = cfg.tools.omp.hooks.pathAccess.allowPaths;
+        denyPaths = cfg.tools.omp.hooks.pathAccess.denyPaths;
       };
       custom = cfg.tools.omp.hooks.custom;
     };
@@ -1007,6 +1014,12 @@ let
         // lib.optionalAttrs (profile.hooks.protectedPaths.enable or false) {
           "agent/extensions/protected-paths.ts" = {
             text = ompSupport.mkProtectedPathsHook profile.hooks.protectedPaths;
+          };
+        }
+
+        // lib.optionalAttrs (profile.hooks.pathAccess.enable or false) {
+          "agent/extensions/path-access.ts" = {
+            text = ompSupport.mkPathAccessHook profile.hooks.pathAccess;
           };
         }
         // lib.mapAttrs' (
@@ -1843,6 +1856,45 @@ in
               default = [ ];
               description = "Additional path globs appended to the omp protected paths defaults.";
             };
+
+            protectReads = mkOption {
+              type = types.bool;
+              default = true;
+              description = ''
+                When true, the protected paths hook also blocks read operations
+                (read, find, search, grep) on protected paths, not just writes.
+              '';
+            };
+          };
+
+          pathAccess = {
+            enable = mkEnableOption "path access hook (controls access to paths outside the workspace)" // {
+              default = true;
+            };
+            mode = mkOption {
+              type = types.enum [
+                "block"
+                "ask"
+                "allow"
+              ];
+              default = "ask";
+              description = ''
+                Response mode for the path access hook:
+                - "block": Hard-block out-of-workspace access.
+                - "ask": Prompt for user confirmation with once/session/always choices.
+                - "allow": Allow all out-of-workspace access.
+              '';
+            };
+            allowPaths = mkOption {
+              type = types.listOf types.str;
+              default = ompSupport.defaultPathAccessAllowPaths;
+              description = "Paths always allowed for out-of-workspace access.";
+            };
+            denyPaths = mkOption {
+              type = types.listOf types.str;
+              default = ompSupport.defaultPathAccessDenyPaths;
+              description = "Paths always denied for access.";
+            };
           };
           custom = mkOption {
             type = types.attrsOf types.lines;
@@ -2089,6 +2141,41 @@ in
                         type = types.nullOr (types.listOf types.str);
                         default = null;
                         description = "Additional per-profile protected path globs.";
+                      };
+
+                      protectReads = mkOption {
+                        type = types.nullOr types.bool;
+                        default = null;
+                        description = "Per-profile protected paths read protection override.";
+                      };
+                    };
+
+                    pathAccess = {
+                      enable = mkOption {
+                        type = types.nullOr types.bool;
+                        default = null;
+                        description = "Per-profile path access hook override.";
+                      };
+                      mode = mkOption {
+                        type = types.nullOr (
+                          types.enum [
+                            "block"
+                            "ask"
+                            "allow"
+                          ]
+                        );
+                        default = null;
+                        description = "Per-profile path access response mode override.";
+                      };
+                      allowPaths = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Per-profile path access allowed paths override.";
+                      };
+                      denyPaths = mkOption {
+                        type = types.nullOr (types.listOf types.str);
+                        default = null;
+                        description = "Per-profile path access denied paths override.";
                       };
                     };
                     custom = mkOption {
