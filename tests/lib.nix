@@ -10,6 +10,103 @@ let
 
   aiTools = import ../ai-tools { inherit inputs lib pkgs; };
 
+  omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+
+  protectedPathsRuntimeHook = pkgs.writeText "protected-paths-runtime.ts" (
+    omp.mkProtectedPathsHook { mode = "ask"; }
+  );
+  pathAccessRuntimeHook = pkgs.writeText "path-access-runtime.ts" (
+    omp.mkPathAccessHook {
+      mode = "ask";
+      allowPaths = [ ];
+      denyPaths = [ ];
+    }
+  );
+  hookRuntimeTests = pkgs.writeText "omp-hook-runtime-tests.ts" ''
+    import protectedPaths from "${protectedPathsRuntimeHook}";
+    import pathAccess from "${pathAccessRuntimeHook}";
+
+    type ToolCall = { toolName: string; input?: Record<string, unknown> };
+    type Handler = (call: ToolCall, ctx: any) => Promise<any> | any;
+
+    function assert(condition: unknown, message: string): void {
+      if (!condition) throw new Error(message);
+    }
+
+    function register(extension: (pi: any) => void): Handler {
+      let handler: Handler | undefined;
+      extension({
+        on(name: string, fn: Handler) {
+          if (name !== "tool_call") throw new Error("unexpected event " + name);
+          handler = fn;
+        },
+      });
+      if (!handler) throw new Error("extension did not register tool_call");
+      return handler;
+    }
+
+    function uiRecorder(choice: string) {
+      const calls: Array<{ title: string; options: string[] }> = [];
+      return {
+        calls,
+        ctx: {
+          hasUI: true,
+          ui: {
+            select(title: string, options: string[]) {
+              assert(arguments.length === 2, "select must be called with title and options only");
+              assert(Array.isArray(options), "select options must be an array");
+              assert(options.every((option) => typeof option === "string"), "select options must be strings");
+              calls.push({ title, options });
+              return choice;
+            },
+          },
+        },
+      };
+    }
+
+    const protectedHandler = register(protectedPaths);
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await protectedHandler({ toolName: "read", input: { path: ".env.local" } }, ui.ctx);
+      assert(result === undefined, ".env.local should be allowed once after prompt");
+      assert(ui.calls.length === 1, ".env.local should prompt as protected path");
+    }
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await protectedHandler({
+        toolName: "read",
+        input: { path: process.cwd() + "/.env" },
+      }, ui.ctx);
+      assert(result === undefined, "absolute workspace .env should be allowed once after prompt");
+      assert(ui.calls.length === 1, "absolute workspace .env should prompt as protected path");
+    }
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await protectedHandler({ toolName: "search", input: { pattern: ".env" } }, ui.ctx);
+      assert(result === undefined, "search pattern alone should not be treated as a path");
+      assert(ui.calls.length === 0, "search pattern alone should not prompt");
+    }
+
+    const pathAccessHandler = register(pathAccess);
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await pathAccessHandler({ toolName: "grep", input: { path: "/tmp/outside" } }, ui.ctx);
+      assert(result === undefined, "grep outside workspace should be allowed once after prompt");
+      assert(ui.calls.length === 1, "grep outside workspace should prompt");
+    }
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await pathAccessHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, ui.ctx);
+      assert(result === undefined, "search pattern alone should not be treated as an outside path");
+      assert(ui.calls.length === 0, "search pattern alone should not prompt for path access");
+    }
+  '';
+
   failures = lib.debug.runTests {
     testCommandGroupsFlattenToClaudeCommands = {
       expr = lib.foldl' lib.recursiveUpdate { } (builtins.attrValues aiTools.commandGroups);
@@ -160,7 +257,7 @@ let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
           hook = omp.mkProtectedPathsHook { mode = "ask"; };
         in
-        builtins.match ".*checkGrant\\(fp\\).*ctx\\.ui\\.select.*Allow for session.*saveGrant\\(fp, choice\\).*" hook
+        builtins.match ".*checkGrant\\(fp\\).*ctx\\.ui\\.select.*Allow for session.*saveGrant\\(fp, scope\\).*" hook
         != null;
       expected = true;
     };
@@ -283,6 +380,7 @@ let
   };
 in
 assert failures == [ ];
-pkgs.runCommand "ai-tools-lib-tests" { } ''
+pkgs.runCommand "ai-tools-lib-tests" { nativeBuildInputs = [ pkgs.bun ]; } ''
+  bun ${hookRuntimeTests}
   touch $out
 ''

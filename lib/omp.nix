@@ -483,13 +483,45 @@ let
         grantNamespace = "protectedPaths";
       })}
 
+      var path = require("path")
+
       const PROTECTED_GLOBS = ${builtins.toJSON allGlobs}
+
+      function escapeRegExp(s: string): string {
+        return s.replace(/[|\\{}()[\]^$+?.]/g, "\\$&")
+      }
+
+      function matchesWildcard(fp: string, glob: string): boolean {
+        var parts = glob.split("*").map(escapeRegExp)
+        return new RegExp("^" + parts.join("[^/]*") + "$").test(fp)
+      }
+
+      function normalizeToolPath(fp: string): string {
+        var expanded = fp
+        if (expanded === "~") expanded = process.env.HOME || expanded
+        if (expanded.startsWith("~/")) expanded = (process.env.HOME || "") + expanded.slice(1)
+
+        var cwd = path.resolve(process.cwd())
+        var resolved = expanded.startsWith("/") ? path.resolve(expanded) : path.resolve(cwd, expanded)
+        if (resolved === cwd) return "."
+        if (resolved.startsWith(cwd + "/")) return resolved.slice(cwd.length + 1)
+        return resolved
+      }
+
+      function getToolPath(call): string {
+        if (call.toolName === "search" || call.toolName === "grep") {
+          return String(call.input?.path ?? call.input?.directory ?? "")
+        }
+        return String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? "")
+      }
 
       function matchesProtected(fp: string): boolean {
         for (const glob of PROTECTED_GLOBS) {
           if (glob.endsWith("/**")) {
             const prefix = glob.slice(0, -3)
             if (fp === prefix || fp.startsWith(prefix + "/")) return true
+          } else if (glob.includes("*")) {
+            if (matchesWildcard(fp, glob)) return true
           } else {
             if (fp === glob) return true
           }
@@ -501,7 +533,10 @@ let
         pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
           ${readToolGuard}
 
-          const fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
+          const rawFp = getToolPath(call)
+          if (!rawFp) return
+
+          const fp = normalizeToolPath(rawFp)
           if (matchesProtected(fp)) {
       ${
         if modeAsk then
@@ -509,15 +544,16 @@ let
             var grant = checkGrant(fp)
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
-            var choice = await ctx.ui.select("Protected Path", "${reasonPrefix}" + fp + " is blocked. Allow access?", [
-              { label: "Allow once", value: "once" },
-              { label: "Allow for session", value: "session" },
-              { label: "Always allow", value: "always" },
-              { label: "Deny", value: "deny" }
+            var choice = await ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
+              "Allow once",
+              "Allow for session",
+              "Always allow",
+              "Deny"
             ])
-            if (!choice || choice === "deny") return { block: true, reason: "Protected path: user denied " + fp }
-            if (choice === "once") return
-            saveGrant(fp, choice)
+            if (!choice || choice === "Deny") return { block: true, reason: "Protected path: user denied " + fp }
+            if (choice === "Allow once") return
+            var scope = choice === "Always allow" ? "always" : "session"
+            saveGrant(fp, scope)
           ''
         else
           ''
@@ -649,13 +685,20 @@ let
         return false
       }
 
-      const PATH_TOOLS = new Set(["read", "write", "edit", "find", "search", "filesystem_read_file", "filesystem_write_file", "filesystem_list_directory"])
+      function getToolPath(call): string {
+        if (call.toolName === "search" || call.toolName === "grep") {
+          return String(call.input?.path ?? call.input?.directory ?? "")
+        }
+        return String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? "")
+      }
+
+      const PATH_TOOLS = new Set(["read", "write", "edit", "find", "search", "grep", "filesystem_read_file", "filesystem_write_file", "filesystem_list_directory"])
 
       export default function (pi) {
         pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
           if (!PATH_TOOLS.has(call.toolName)) return
 
-          var fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
+          var fp = getToolPath(call)
           if (!fp) return
 
           fp = normalizePath(fp)
