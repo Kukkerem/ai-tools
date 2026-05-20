@@ -140,6 +140,16 @@ Grants file format:
 
 `session` grants are never written to disk — they exist only in the in-memory Map and are cleared on OMP exit. `always` grants are persisted to `grants.json`. File is human-editable for cleanup.
 
+## Implementation Phasing
+
+The two layers are independent and will be implemented separately:
+
+**Phase 1 — Layer 2: In-Process Policy Hooks.** New `pathAccess` hook, extended `protectedPaths` read protection, session-based grants. No new flake inputs. Modifies `lib/omp.nix` and `modules/home-manager/ai-tools.nix` only.
+
+**Phase 2 — Layer 1: OS-Level Containment.** Custom bubblewrap module via `jail-nix`, `mkJailedOmpWrapper`, sandbox Nix options. Requires new `jail-nix` flake input. Modifies `flake.nix`, `lib/omp.nix`, `modules/home-manager/ai-tools.nix`.
+
+Phase 1 is implemented first because it provides immediate security value without any new dependencies, and can be tested in isolation.
+
 ## Data Flow: Sandboxed OMP Launch
 
 1. User runs `jailed-omp` (or `jailed-ocw` for a profile)
