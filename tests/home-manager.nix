@@ -326,6 +326,8 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     omp_wrapper=${generation}/home-path/bin/omp
     omp_perm_gate=${generation}/home-files/.omp/agent/extensions/permission-gate.ts
     omp_protected_paths=${generation}/home-files/.omp/agent/extensions/protected-paths.ts
+
+    omp_path_access=${generation}/home-files/.omp/agent/extensions/path-access.ts
     omp_agent_browser_reference=${generation}/home-files/.omp/agent/skills/agent-browser/references/commands.md
     omp_caveman_compress_script=${generation}/home-files/.omp/agent/skills/caveman-compress/scripts/compress.py
     omp_tdd_skill=${generation}/home-files/.omp/agent/skills/tdd/SKILL.md
@@ -338,6 +340,8 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -x "$omp_wrapper"
     test -f "$omp_perm_gate"
     test -f "$omp_protected_paths"
+
+    test -f "$omp_path_access"
     test -f "$omp_agent_browser_reference"
     test -f "$omp_caveman_compress_script"
     test -f "$omp_tdd_skill"
