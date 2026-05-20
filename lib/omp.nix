@@ -739,8 +739,8 @@ let
             return { block: true, reason: "Path access denied: " + fp + " is in the deny list" }
           }
 
-          // Check protected globs — defer to protectedPaths hook to avoid async race
-          if (matchesProtectedGlob(fp)) return
+          // Protected glob — block synchronously (protectedPaths handles ask-mode prompt)
+          if (matchesProtectedGlob(fp)) return { block: true, reason: "Protected path: " + fp + " is blocked" }
 
           // Check allow list — skip workspace check
           if (isPathAllowed(fp)) return
