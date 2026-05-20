@@ -305,9 +305,9 @@ let
       ${
         if modeAsk then
           ''
-            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
             var grant = checkGrant(command)
             if (grant) return
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
             var choice = await ctx.ui.select("Permission Gate", "Command: " + command + " may be dangerous.", [
               { label: "Allow once", value: "once" },
               { label: "Allow for session", value: "session" },
@@ -331,9 +331,9 @@ let
       ${
         if modeAsk then
           ''
-            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
             var cmdGrant = checkGrant(firstWord)
             if (cmdGrant) return
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
             var cmdChoice = await ctx.ui.select("Permission Gate", firstWord + " is not allowed.\nCommand: " + command, [
               { label: "Allow once", value: "once" },
               { label: "Allow for session", value: "session" },
@@ -477,35 +477,45 @@ let
     }:
     let
       modeAsk = mode == "ask";
+      modeBlock = mode == "block";
     in
     ''
       ${mkGrantsHelper { grantNamespace = "pathAccess"; }}
 
+      var path = require("path")
+
       const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
       const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
 
+      function expandHome(fp: string): string {
+        if (fp === "~") return process.env.HOME || fp
+        if (fp.startsWith("~/")) return (process.env.HOME || "") + fp.slice(1)
+        return fp
+      }
+
+      function normalizePath(fp: string): string {
+        var expanded = expandHome(fp)
+        if (!expanded.startsWith("/")) return path.resolve(process.cwd(), fp)
+        return path.resolve(expanded)
+      }
+
       function isInsideWorkspace(fp: string): boolean {
         if (!fp) return true
-        var resolved = fp
-        if (fp.startsWith("~")) {
-          resolved = (process.env.HOME || "") + fp.slice(1)
-        }
-        if (!resolved.startsWith("/")) return true
-        var cwd = process.cwd()
-        return resolved === cwd || resolved.startsWith(cwd + "/")
+        var cwd = path.resolve(process.cwd())
+        return fp === cwd || fp.startsWith(cwd + "/")
       }
 
       function isPathAllowed(fp: string): boolean {
         for (var i = 0; i < ALLOW_PATHS.length; i++) {
-          if (fp.startsWith(ALLOW_PATHS[i])) return true
+          var allowPath = normalizePath(ALLOW_PATHS[i])
+          if (fp === allowPath || fp.startsWith(allowPath + "/")) return true
         }
         return false
       }
 
       function isPathDenied(fp: string): boolean {
         for (var i = 0; i < DENY_PATHS.length; i++) {
-          var d = DENY_PATHS[i]
-          if (d.startsWith("~")) d = (process.env.HOME || "") + d.slice(1)
+          var d = normalizePath(DENY_PATHS[i])
           if (fp === d || fp.startsWith(d + "/")) return true
         }
         return false
@@ -520,9 +530,7 @@ let
           var fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
           if (!fp) return
 
-          // Expand ~ to HOME for comparison
-          if (fp.startsWith("~")) fp = (process.env.HOME || "") + fp.slice(1)
-          if (!fp.startsWith("/")) return // relative paths are inside workspace
+          fp = normalizePath(fp)
 
           // Check deny list first — always blocks
           if (isPathDenied(fp)) {
@@ -553,10 +561,12 @@ let
             if (choice === "once") return
             saveGrant(fp, choice)
           ''
-        else
+        else if modeBlock then
           ''
             return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
           ''
+        else
+          ""
       }
         })
       }

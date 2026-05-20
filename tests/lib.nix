@@ -173,6 +173,55 @@ let
         builtins.match ".*saveGrant.*" hook != null;
       expected = false;
     };
+
+    testPermissionGateAskChecksGrantBeforeNoUi = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPermissionGateHook { mode = "ask"; };
+        in
+        builtins.match ".*var grant = checkGrant\\(command\\).*if \\(!ctx\\.hasUI\\).*var cmdGrant = checkGrant\\(firstWord\\).*if \\(!ctx\\.hasUI\\).*" hook
+        != null;
+      expected = true;
+    };
+
+    testPathAccessAllowModeDoesNotBlockOutsideWorkspace = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPathAccessHook {
+            mode = "allow";
+            allowPaths = [ ];
+            denyPaths = [ ];
+          };
+        in
+        builtins.match ".*Path access blocked:.*" hook == null
+        && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
+      expected = true;
+    };
+
+    testPathAccessAllowPathsRequireExactDirectoryBoundary = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPathAccessHook {
+            allowPaths = [ "/nix/store" ];
+            denyPaths = [ ];
+          };
+        in
+        builtins.match ".*fp === allowPath \\|\\| fp\\.startsWith\\(allowPath \\+ \"/\"\\).*" hook != null;
+      expected = true;
+    };
+
+    testPathAccessNormalizesRelativePathsBeforePolicy = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPathAccessHook { };
+        in
+        builtins.match ".*path\\.resolve\\(process\\.cwd\\(\\), fp\\).*" hook != null;
+      expected = true;
+    };
   };
 in
 assert failures == [ ];
