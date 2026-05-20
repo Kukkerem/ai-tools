@@ -102,6 +102,26 @@ let
         builtins.match ".*loadGrants.*saveGrant.*sessionGrants.*" (omp.mkGrantsHelper { grantNamespace = "test"; }) != null;
       expected = true;
     };
+
+    testPathAccessHookContainsWorkspaceCheck = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPathAccessHook { mode = "ask"; allowPaths = [ "/nix/store" ]; denyPaths = [ "~/.ssh" ]; };
+        in
+        builtins.match ".*isInsideWorkspace.*ALLOW_PATHS.*DENY_PATHS.*checkGrant.*" hook != null;
+      expected = true;
+    };
+
+    testPathAccessHookBlockMode = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkPathAccessHook { mode = "block"; allowPaths = []; denyPaths = []; };
+        in
+        builtins.match ".*block: true.*" hook != null && builtins.match ".*ctx\\.ui\\.confirm.*" hook == null;
+      expected = true;
+    };
   };
 in
 assert failures == [ ];

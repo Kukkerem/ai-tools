@@ -427,6 +427,109 @@ let
       loadGrants()
     '';
 
+  defaultPathAccessAllowPaths = [
+    "/nix/store"
+  ];
+
+  defaultPathAccessDenyPaths = [
+    "~/.ssh"
+    "~/.gnupg"
+  ];
+
+  mkPathAccessHook =
+    {
+      allowPaths ? defaultPathAccessAllowPaths,
+      denyPaths ? defaultPathAccessDenyPaths,
+      mode ? "ask",
+      ...
+    }:
+    let
+      modeAsk = mode == "ask";
+    in
+    ''
+      ${mkGrantsHelper { grantNamespace = "pathAccess"; }}
+
+      const ALLOW_PATHS: string[] = ${builtins.toJSON allowPaths}
+      const DENY_PATHS: string[] = ${builtins.toJSON denyPaths}
+
+      function isInsideWorkspace(fp: string): boolean {
+        if (!fp) return true
+        var resolved = fp
+        if (fp.startsWith("~")) {
+          resolved = (process.env.HOME || "") + fp.slice(1)
+        }
+        if (!resolved.startsWith("/")) return true
+        var cwd = process.cwd()
+        return resolved === cwd || resolved.startsWith(cwd + "/")
+      }
+
+      function isPathAllowed(fp: string): boolean {
+        for (var i = 0; i < ALLOW_PATHS.length; i++) {
+          if (fp.startsWith(ALLOW_PATHS[i])) return true
+        }
+        return false
+      }
+
+      function isPathDenied(fp: string): boolean {
+        for (var i = 0; i < DENY_PATHS.length; i++) {
+          var d = DENY_PATHS[i]
+          if (d.startsWith("~")) d = (process.env.HOME || "") + d.slice(1)
+          if (fp === d || fp.startsWith(d + "/")) return true
+        }
+        return false
+      }
+
+      const PATH_TOOLS = new Set(["read", "write", "edit", "find", "search", "filesystem_read_file", "filesystem_write_file", "filesystem_list_directory"])
+
+      export default function (pi) {
+        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
+          if (!PATH_TOOLS.has(call.toolName)) return
+
+          var fp = String(call.input?.filePath ?? call.input?.path ?? call.input?.directory ?? call.input?.pattern ?? "")
+          if (!fp) return
+
+          // Expand ~ to HOME for comparison
+          if (fp.startsWith("~")) fp = (process.env.HOME || "") + fp.slice(1)
+          if (!fp.startsWith("/")) return // relative paths are inside workspace
+
+          // Check deny list first — always blocks
+          if (isPathDenied(fp)) {
+            return { block: true, reason: "Path access denied: " + fp + " is in the deny list" }
+          }
+
+          // Check allow list — skip workspace check
+          if (isPathAllowed(fp)) return
+
+          // Check if inside workspace
+          if (isInsideWorkspace(fp)) return
+
+          // Outside workspace — check grants
+          var grant = checkGrant(fp)
+          if (grant) return
+
+      ${
+        if modeAsk then
+          ''
+            if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
+            var choice = await ctx.ui.select("Path Access", fp + " is outside the workspace. Allow access?", [
+              { label: "Allow once", value: "once" },
+              { label: "Allow for session", value: "session" },
+              { label: "Always allow", value: "always" },
+              { label: "Deny", value: "deny" }
+            ])
+            if (!choice || choice === "deny") return { block: true, reason: "Path access: user denied " + fp }
+            if (choice === "once") return
+            saveGrant(fp, choice)
+          ''
+        else
+          ''
+            return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
+          ''
+      }
+        })
+      }
+    '';
+
   hooks = {
     permissionGate = mkPermissionGateHook { };
     protectedPaths = mkProtectedPathsHook { };
@@ -461,8 +564,11 @@ in
     defaultPermissionGateBlockedCommands
     defaultPermissionGateBlockedPatterns
     defaultProtectedPathGlobs
+    defaultPathAccessAllowPaths
+    defaultPathAccessDenyPaths
     hooks
     mkGrantsHelper
+    mkPathAccessHook
     mkPermissionGateHook
     mkProtectedPathsHook
     mkOmpConfig
