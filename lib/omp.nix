@@ -755,17 +755,7 @@ let
       ${
         if modeAsk then
           ''
-            if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + fp + " is outside workspace" }
-            var choice = await ctx.ui.select("Path Access: " + fp + " is outside the workspace.", [
-              "Allow once",
-              "Allow for session",
-              "Always allow",
-              "Deny"
-            ])
-            if (!choice || choice === "Deny") return { block: true, reason: "Path access: user denied " + fp }
-            if (choice === "Allow once") return
-            var fpScope = choice === "Always allow" ? "always" : "session"
-            saveGrant(fp, fpScope)
+            return { block: true, reason: "Path access blocked: " + fp + " is outside workspace. Add to allowPaths or grants.json to permit." }
           ''
         else if modeBlock then
           ''
