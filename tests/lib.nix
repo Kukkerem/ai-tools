@@ -85,6 +85,26 @@ let
 
     {
       const ui = uiRecorder("Allow once");
+      const result = await protectedHandler({
+        toolName: "read",
+        input: { path: "/tmp/project/.git/config" },
+      }, ui.ctx);
+      assert(result === undefined, "absolute .git path should be allowed once after prompt");
+      assert(ui.calls.length === 1, "absolute .git path should prompt as protected path");
+    }
+
+    {
+      const ui = uiRecorder("Allow once");
+      const result = await protectedHandler({
+        toolName: "read",
+        input: { path: "/tmp/project/.direnv/flake-profile" },
+      }, ui.ctx);
+      assert(result === undefined, "absolute .direnv path should be allowed once after prompt");
+      assert(ui.calls.length === 1, "absolute .direnv path should prompt as protected path");
+    }
+
+    {
+      const ui = uiRecorder("Allow once");
       const result = await protectedHandler({ toolName: "search", input: { pattern: ".env" } }, ui.ctx);
       assert(result === undefined, "search pattern alone should not be treated as a path");
       assert(ui.calls.length === 0, "search pattern alone should not prompt");

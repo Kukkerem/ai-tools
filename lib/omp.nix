@@ -520,10 +520,14 @@ let
           if (glob.endsWith("/**")) {
             const prefix = glob.slice(0, -3)
             if (fp === prefix || fp.startsWith(prefix + "/")) return true
+            if (fp.endsWith("/" + prefix) || fp.includes("/" + prefix + "/")) return true
           } else if (glob.includes("*")) {
             if (matchesWildcard(fp, glob)) return true
+            var base = path.basename(fp)
+            if (base !== fp && matchesWildcard(base, glob)) return true
           } else {
             if (fp === glob) return true
+            if (path.basename(fp) === glob) return true
           }
         }
         return false
