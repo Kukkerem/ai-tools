@@ -55,6 +55,7 @@
     };
 
     mcp-openrouter-search.url = "github:Kukkerem/mcp-openrouter-search/v0.1.4";
+    nix-openclaw-tools.url = "github:openclaw/nix-openclaw-tools";
   };
 
   outputs =

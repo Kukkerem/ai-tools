@@ -5,6 +5,7 @@
 }:
 let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  openclawTools = inputs.nix-openclaw-tools.packages.${pkgs.stdenv.hostPlatform.system};
   upstreamMcpPackages = inputs.mcp-servers-nix.packages.${pkgs.stdenv.hostPlatform.system};
   mcpNixosPackage = inputs.mcp-nixos.packages.${pkgs.stdenv.hostPlatform.system}.default;
   mcpSupport = import ./mcp.nix { inherit inputs lib pkgs; };
@@ -19,6 +20,7 @@ let
       ps.tiktoken
     ]))
   ];
+  gogSkillRuntimePackages = [ openclawTools.gogcli ];
 
   superpowersSkillRuntimePackages = [
     pkgs.nodejs
@@ -135,6 +137,7 @@ in
     sharedAgentPackages
     superpowersSkillRuntimePackages
     toolPackages
+    gogSkillRuntimePackages
     ;
 
   bundles = {

@@ -230,6 +230,7 @@ let
     ++ (if cfg.skills.dcp.enable then [ "dcp" ] else [ ])
     ++ (if cfg.skills.karpathyGuidelines.enable then [ "karpathy-guidelines" ] else [ ])
     ++ (if cfg.skills.terraform.enable then [ "terraform" ] else [ ])
+    ++ (if cfg.skills.gog.enable then [ "gog" ] else [ ])
     ++ optionals cfg.skills.caveman.enable cavemanSkillNames
     ++ optionals cfg.skills.mattpocock.enable mattpocockSkillNames
     ++ optionals cfg.skills.superpowers.enable superpowersSkillNames
@@ -2453,6 +2454,12 @@ in
         default = false;
         description = "Terraform skill from antonbabenko/terraform-skill.";
       };
+
+      gog.enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "gog CLI skill from openclaw/nix-openclaw-tools. Installs gogcli when enabled.";
+      };
     };
   };
 
@@ -2495,6 +2502,10 @@ in
 
     (mkIf cfg.skills.superpowers.enable {
       home.packages = packageSets.superpowersSkillRuntimePackages;
+    })
+
+    (mkIf cfg.skills.gog.enable {
+      home.packages = packageSets.gogSkillRuntimePackages;
     })
 
     (mkIf cfg.mcp.servers.serena.enable {

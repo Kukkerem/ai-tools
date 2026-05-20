@@ -36,6 +36,8 @@ let
 
   terraformSkillSrc = inputs.terraform-skill;
   terraformSkillFiles = regularFilesRecursive "${terraformSkillSrc}/skills/terraform-skill";
+  gogSkillSrc = inputs.nix-openclaw-tools;
+  gogSkillFiles = regularFilesRecursive "${gogSkillSrc}/tools/gogcli/skills/gog";
 
   pathBackedSkillFiles = name: regularFilesRecursive skills.${name};
 in
@@ -80,4 +82,5 @@ in
   writing-skills = superpowersSkillFiles "writing-skills";
 
   terraform = terraformSkillFiles;
+  gog = gogSkillFiles;
 }

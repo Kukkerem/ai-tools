@@ -294,6 +294,24 @@
         "type": "github"
       }
     },
+    "nix-openclaw-tools": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1779015271,
+        "narHash": "sha256-K22IvBQrEtY0Dt+udqfTmPzDSPQwTUaQVxpJOBYOceE=",
+        "owner": "openclaw",
+        "repo": "nix-openclaw-tools",
+        "rev": "9085cb57df9396a4d3ac46fd17dfa04f19c56cd3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openclaw",
+        "repo": "nix-openclaw-tools",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1778869304,
@@ -359,6 +377,22 @@
     },
     "nixpkgs_4": {
       "locked": {
+        "lastModified": 1767364772,
+        "narHash": "sha256-fFUnEYMla8b7UKjijLnMe+oVFOz6HjijGGNS1l7dYaQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "16c7794d0a28b5a37904d55bcca36003b9109aaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_5": {
+      "locked": {
         "lastModified": 1778869304,
         "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
         "owner": "NixOS",
@@ -383,7 +417,8 @@
         "mcp-nixos": "mcp-nixos",
         "mcp-openrouter-search": "mcp-openrouter-search",
         "mcp-servers-nix": "mcp-servers-nix",
-        "nixpkgs": "nixpkgs_4",
+        "nix-openclaw-tools": "nix-openclaw-tools",
+        "nixpkgs": "nixpkgs_5",
         "superpowers": "superpowers",
         "terraform-skill": "terraform-skill"
       }
