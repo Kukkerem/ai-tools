@@ -283,7 +283,9 @@ let
       modeAsk = mode == "ask";
     in
     ''
-      ${lib.optionalString modeAsk (mkGrantsHelper { grantNamespace = "permissionGate"; })}
+      ${lib.optionalString modeAsk (mkGrantsHelper {
+        grantNamespace = "permissionGate";
+      })}
 
       var BLOCKED_PATTERNS = [
       ${mkRegExpEntries allBlockedPatterns}
@@ -303,22 +305,22 @@ let
       ${
         if modeAsk then
           ''
-              if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
-              var grant = checkGrant(command)
-              if (grant) return
-              var choice = await ctx.ui.select("Permission Gate", "Command: " + command + " may be dangerous.", [
-                { label: "Allow once", value: "once" },
-                { label: "Allow for session", value: "session" },
-                { label: "Always allow", value: "always" },
-                { label: "Deny", value: "deny" }
-              ])
-              if (!choice || choice === "deny") return { block: true, reason: "Permission gate: user denied command" }
-              if (choice === "once") return
-              saveGrant(command, choice)
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+            var grant = checkGrant(command)
+            if (grant) return
+            var choice = await ctx.ui.select("Permission Gate", "Command: " + command + " may be dangerous.", [
+              { label: "Allow once", value: "once" },
+              { label: "Allow for session", value: "session" },
+              { label: "Always allow", value: "always" },
+              { label: "Deny", value: "deny" }
+            ])
+            if (!choice || choice === "deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (choice === "once") return
+            saveGrant(command, choice)
           ''
         else
           ''
-              return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+            return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
           ''
       }
             }
@@ -329,22 +331,22 @@ let
       ${
         if modeAsk then
           ''
-              if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-              var cmdGrant = checkGrant(firstWord)
-              if (cmdGrant) return
-              var cmdChoice = await ctx.ui.select("Permission Gate", firstWord + " is not allowed.\nCommand: " + command, [
-                { label: "Allow once", value: "once" },
-                { label: "Allow for session", value: "session" },
-                { label: "Always allow", value: "always" },
-                { label: "Deny", value: "deny" }
-              ])
-              if (!cmdChoice || cmdChoice === "deny") return { block: true, reason: "Permission gate: user denied command" }
-              if (cmdChoice === "once") return
-              saveGrant(firstWord, cmdChoice)
+            if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+            var cmdGrant = checkGrant(firstWord)
+            if (cmdGrant) return
+            var cmdChoice = await ctx.ui.select("Permission Gate", firstWord + " is not allowed.\nCommand: " + command, [
+              { label: "Allow once", value: "once" },
+              { label: "Allow for session", value: "session" },
+              { label: "Always allow", value: "always" },
+              { label: "Deny", value: "deny" }
+            ])
+            if (!cmdChoice || cmdChoice === "deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (cmdChoice === "once") return
+            saveGrant(firstWord, cmdChoice)
           ''
         else
           ''
-              return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+            return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
           ''
       }
           }
