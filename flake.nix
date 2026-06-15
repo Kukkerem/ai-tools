@@ -40,7 +40,7 @@
     };
 
     caveman = {
-      url = "github:JuliusBrussee/caveman/18e45320a0b1aecc959a807f8568ee44b3aaa055";
+      url = "github:JuliusBrussee/caveman/25d22f864ad68cc447a4cb93aefde918aa4aec9f";
       flake = false;
     };
 
