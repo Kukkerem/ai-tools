@@ -1055,6 +1055,33 @@ let
   ompWrapperPackages = lib.mapAttrsToList (_name: profile: mkOmpProfileWrapper _name profile) (
     lib.filterAttrs (_name: profile: profile.commandName != null) enabledOmpProfiles
   );
+
+  allKnownSkillNames = unique (
+    cavemanSkillNames
+    ++ mattpocockSkillNames
+    ++ superpowersSkillNames
+    ++ [
+      "notebooklm"
+      "rtk"
+      "agent-browser"
+      "basic-memory"
+      "dcp"
+      "karpathy-guidelines"
+      "terraform"
+      "gog"
+    ]
+  );
+
+  orphanableSkillNames = lib.subtractLists enabledSkillNames allKnownSkillNames;
+
+  managedSkillRoots =
+    optionals cfg.tools.codex.enable [ ".agents/skills" ]
+    ++ optionals cfg.tools.opencode.enable (
+      map (profile: "${profile.configDir}/skills") (lib.attrValues enabledOpencodeProfiles)
+    )
+    ++ optionals cfg.tools.omp.enable (
+      map (profile: "${profile.configDir}/agent/skills") (lib.attrValues enabledOmpProfiles)
+    );
 in
 {
   options.programs.ai-tools = {
@@ -2463,6 +2490,26 @@ in
     {
       home.packages = packageSets.sharedAgentPackages;
       programs.git.ignores = lib.mkAfter gitIgnores;
+
+      # Home Manager only unlinks files tracked in the previous generation, so a
+      # disabled skill's dir lingers and stays discoverable; prune the known ones.
+      home.activation = lib.optionalAttrs (managedSkillRoots != [ ] && orphanableSkillNames != [ ]) {
+        aiToolsPruneOrphanSkills = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+          for skillRoot in ${lib.escapeShellArgs managedSkillRoots}; do
+            for skillName in ${lib.escapeShellArgs orphanableSkillNames}; do
+              skillDir="$HOME/$skillRoot/$skillName"
+              # only prune our own emitted symlinks, never a user's real skill dir
+              if [ -L "$skillDir/SKILL.md" ]; then
+                case "$(readlink "$skillDir/SKILL.md")" in
+                  *-home-manager-files/*)
+                    $DRY_RUN_CMD rm $VERBOSE_ARG -rf "$skillDir"
+                    ;;
+                esac
+              fi
+            done
+          done
+        '';
+      };
 
       assertions = [
         {
