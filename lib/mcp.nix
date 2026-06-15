@@ -21,11 +21,11 @@ let
     paths = [
       (pkgs.writeShellScriptBin "notebooklm-mcp" ''
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.13 notebooklm-mcp "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.7.2 notebooklm-mcp "$@"
       '')
       (pkgs.writeShellScriptBin "nlm" ''
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.13 nlm "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.7.2 nlm "$@"
       '')
     ];
   };
