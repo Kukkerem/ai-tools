@@ -547,7 +547,9 @@ let
 
       function isPathAllowed(absFp: string): boolean {
         for (var i = 0; i < ALLOW_PATHS.length; i++) {
-          var ap = path.resolve(process.cwd(), ALLOW_PATHS[i])
+          var ap = ALLOW_PATHS[i]
+          if (ap.startsWith("~")) ap = (process.env.HOME || "") + ap.slice(1)
+          ap = path.resolve(process.cwd(), ap)
           if (absFp === ap || absFp.startsWith(ap + "/")) return true
         }
         return false

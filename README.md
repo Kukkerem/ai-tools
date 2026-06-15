@@ -245,6 +245,7 @@ programs.ai-tools.tools.omp = {
     pathAccess = {
       enable = true;        # default: true
       mode = "ask";         # "ask", "block", or "allow"
+      # Both lists accept absolute paths or ~ (expanded to $HOME).
       allowPaths = [ "/nix/store" ];
       denyPaths = [ "~/.ssh" "~/.gnupg" ];
     };
