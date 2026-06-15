@@ -20,8 +20,18 @@ let
       pathAccessMode = "ask";
     }
   );
+
+  protectedPathsTildeAllowHook = pkgs.writeText "protected-paths-tilde-allow.ts" (
+    omp.mkProtectedPathsHook {
+      mode = "ask";
+      allowPaths = [ "~/.omp-wa" ];
+      denyPaths = [ ];
+      pathAccessMode = "ask";
+    }
+  );
   hookRuntimeTests = pkgs.writeText "omp-hook-runtime-tests.ts" ''
     import protectedPaths from "${protectedPathsRuntimeHook}";
+    import protectedPathsTildeAllow from "${protectedPathsTildeAllowHook}";
 
     type ToolCall = { toolName: string; input?: Record<string, unknown> };
     type Handler = (call: ToolCall, ctx: any) => Promise<any> | any;
@@ -117,6 +127,22 @@ let
     {
       const result = await protectedHandler({ toolName: "search", input: { pattern: "/tmp/outside" } }, { hasUI: true });
       assert(result === undefined, "search pattern alone should not be treated as an outside path");
+    }
+
+    // ~ in allowPaths must expand to $HOME (regression: previously only denyPaths expanded ~)
+    {
+      const tildeHandler = register(protectedPathsTildeAllow);
+      const home = process.env.HOME || "";
+      const allowed = await tildeHandler(
+        { toolName: "write", input: { path: home + "/.omp-wa/agent/config.yml" } },
+        { hasUI: true },
+      );
+      assert(allowed === undefined, "~/.omp-wa allowPath should permit writes under $HOME/.omp-wa");
+      const blockedOutside = await tildeHandler(
+        { toolName: "write", input: { path: home + "/.config/elsewhere" } },
+        { hasUI: true },
+      );
+      assert(blockedOutside && (blockedOutside as any).block === true, "paths outside the ~ allowPath stay blocked");
     }
 
     // Concurrent tool_calls must serialize their prompts
