@@ -21,11 +21,11 @@ let
     paths = [
       (pkgs.writeShellScriptBin "notebooklm-mcp" ''
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.10 notebooklm-mcp "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.13 notebooklm-mcp "$@"
       '')
       (pkgs.writeShellScriptBin "nlm" ''
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.10 nlm "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from notebooklm-mcp-cli==0.6.13 nlm "$@"
       '')
     ];
   };
@@ -37,13 +37,13 @@ let
         export BASIC_MEMORY_NO_PROMOS=1
         export BASIC_MEMORY_FORCE_LOCAL=true
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.1 basic-memory "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.5 basic-memory "$@"
       '')
       (pkgs.writeShellScriptBin "basic-memory-mcp" ''
         export BASIC_MEMORY_NO_PROMOS=1
         export BASIC_MEMORY_FORCE_LOCAL=true
         export UV_PYTHON_DOWNLOADS=never
-        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.1 basic-memory mcp "$@"
+        exec ${lib.getExe pkgs.uv} tool run --python ${lib.getExe pkgs.python3} --from basic-memory==0.21.5 basic-memory mcp "$@"
       '')
     ];
   };

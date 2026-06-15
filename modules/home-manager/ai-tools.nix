@@ -712,10 +712,6 @@ let
       defaultOpencodeEnabled && defaultOpencodeProfile.configDir != ".config/opencode"
     ) (mkOpencodeProfileFiles "default" defaultOpencodeProfile);
 
-  defaultOpencodeSkillExtraFiles = optionalAttrs defaultOpencodeEnabled (
-    mkSkillExtraHomeFiles "${defaultOpencodeProfile.configDir}/skills" aiTools.claudeCode.skillFiles
-  );
-
   extraOpencodePackages =
     lib.mapAttrsToList (_: profile: mkOpencodeWrapper profile false) (
       lib.filterAttrs (_: profile: profile.commandName != null) extraOpencodeProfiles
@@ -2517,7 +2513,6 @@ in
 
     (mkIf cfg.tools.claudeCode.enable {
       home.packages = packageSets.claudeCodeHelperPackages;
-      home.file = mkSkillExtraHomeFiles ".claude/skills" aiTools.claudeCode.skillFiles;
 
       programs.claude-code = mkMerge [
         {
@@ -2555,7 +2550,7 @@ in
 
     (mkIf cfg.tools.opencode.enable {
       home.packages = packageSets.opencodeHelperPackages ++ extraOpencodePackages;
-      home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles // defaultOpencodeSkillExtraFiles;
+      home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles;
     })
 
     (mkIf (cfg.tools.opencode.enable && defaultOpencodeEnabled) {
