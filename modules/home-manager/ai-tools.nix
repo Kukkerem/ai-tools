@@ -712,7 +712,6 @@ let
       defaultOpencodeEnabled && defaultOpencodeProfile.configDir != ".config/opencode"
     ) (mkOpencodeProfileFiles "default" defaultOpencodeProfile);
 
-
   extraOpencodePackages =
     lib.mapAttrsToList (_: profile: mkOpencodeWrapper profile false) (
       lib.filterAttrs (_: profile: profile.commandName != null) extraOpencodeProfiles
