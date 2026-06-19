@@ -336,20 +336,6 @@ let
 
   mkOpencodeMcpServers = profileMcp: mcp.forOpenCode (mkProfileMcpConfig profileMcp);
 
-  instructions = builtins.readFile ../../base.md;
-
-  opencodeRules = ''
-    ## External File Loading
-
-    CRITICAL: When you encounter a file reference (e.g., @rules/general.md), use your Read tool to load it on a need-to-know basis. They're relevant to the SPECIFIC task at hand.
-
-    Instructions:
-
-    - Do NOT preemptively load all references - use lazy loading based on actual need
-    - When loaded, treat content as mandatory instructions that override defaults
-    - Follow references recursively when needed
-  '';
-
   jsonFormat = pkgs.formats.json { };
   yamlFormat = pkgs.formats.yaml { };
 
@@ -452,9 +438,11 @@ let
       animations = true;
     };
 
+    # Memory persistence is opt-in (clean context by default). Enable via
+    # `tools.codex.settings.memories = { generate_memories = true; use_memories = true; };`.
     memories = {
-      generate_memories = true;
-      use_memories = true;
+      generate_memories = false;
+      use_memories = false;
     };
 
     analytics.enabled = false;
@@ -586,21 +574,22 @@ let
   mkOpencodeProfileFiles =
     name: profile:
     let
-      sharedFiles = {
-        "${profile.configDir}/AGENTS.md".text = opencodeRules;
-      }
-      // lib.mapAttrs' (
-        agentName: agent: lib.nameValuePair "${profile.configDir}/agents/${agentName}.md" { text = agent; }
-      ) (filterAgents aiTools.opencode.agents)
-      // lib.mapAttrs' (
-        commandName: command:
-        lib.nameValuePair "${profile.configDir}/commands/${commandName}.md" { text = command; }
-      ) (filterCommands aiTools.opencode.commands)
-      // lib.mapAttrs' (
-        skillName: skill:
-        lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
-      ) (filterSkills aiTools.claudeCode.skills)
-      // mkSkillExtraHomeFiles "${profile.configDir}/skills" aiTools.claudeCode.skillFiles;
+      sharedFiles =
+        lib.optionalAttrs (cfg.instructions != "") {
+          "${profile.configDir}/AGENTS.md".text = cfg.instructions;
+        }
+        // lib.mapAttrs' (
+          agentName: agent: lib.nameValuePair "${profile.configDir}/agents/${agentName}.md" { text = agent; }
+        ) (filterAgents aiTools.opencode.agents)
+        // lib.mapAttrs' (
+          commandName: command:
+          lib.nameValuePair "${profile.configDir}/commands/${commandName}.md" { text = command; }
+        ) (filterCommands aiTools.opencode.commands)
+        // lib.mapAttrs' (
+          skillName: skill:
+          lib.nameValuePair "${profile.configDir}/skills/${skillName}/SKILL.md" (mkSkillHomeFile skill)
+        ) (filterSkills aiTools.claudeCode.skills)
+        // mkSkillExtraHomeFiles "${profile.configDir}/skills" aiTools.claudeCode.skillFiles;
       dcpConfig = optionalAttrs profile.dcp.enable {
         "${profile.configDir}/dcp.jsonc".source = jsonFormat.generate "opencode-${name}-dcp" (
           mkOpencodeDcpSettings profile
@@ -931,7 +920,6 @@ let
         mode = cfg.tools.omp.hooks.protectedPaths.mode;
       };
       pathAccess = {
-        enable = cfg.tools.omp.hooks.pathAccess.enable;
         mode = cfg.tools.omp.hooks.pathAccess.mode;
         allowPaths = cfg.tools.omp.hooks.pathAccess.allowPaths;
         denyPaths = cfg.tools.omp.hooks.pathAccess.denyPaths;
@@ -1086,6 +1074,19 @@ in
 {
   options.programs.ai-tools = {
     enable = mkEnableOption "shared AI CLI setup";
+
+    instructions = mkOption {
+      type = types.lines;
+      default = "";
+      example = "You operate in a NixOS environment. Prefer declarative config.";
+      description = ''
+        Shared system prompt injected as context into every enabled tool
+        (Claude Code & Codex `context`, OpenCode `AGENTS.md` and `context`).
+        Empty by default: no context file is written, so each tool keeps its
+        own defaults. Set it (e.g. `builtins.readFile ./system-prompt.md`) to
+        opt into shared instructions. See `examples/home-manager`.
+      '';
+    };
 
     profileName = mkOption {
       type = types.str;
@@ -1907,9 +1908,6 @@ in
           };
 
           pathAccess = {
-            enable = mkEnableOption "path access hook (controls access to paths outside the workspace)" // {
-              default = true;
-            };
             mode = mkOption {
               type = types.enum [
                 "block"
@@ -1918,7 +1916,10 @@ in
               ];
               default = "ask";
               description = ''
-                Response mode for the path access hook:
+                Response mode for the path access hook. Path access checks are
+                part of the protected-paths hook, so they require
+                `protectedPaths.enable = true`; set this to "allow" to disable
+                them while keeping protected-path globs.
                 - "block": Hard-block out-of-workspace access.
                 - "ask": Prompt for user confirmation with once/session/always choices.
                 - "allow": Allow all out-of-workspace access.
@@ -1942,7 +1943,7 @@ in
               "audit-log" = ''
                 export default function (pi) {
                   pi.on("tool_call", function (call) {
-                    console.error("[audit]", call.tool)
+                    console.error("[audit]", call.toolName)
                   })
                 }
               '';
@@ -2201,11 +2202,6 @@ in
                     };
 
                     pathAccess = {
-                      enable = mkOption {
-                        type = types.nullOr types.bool;
-                        default = null;
-                        description = "Per-profile path access hook override.";
-                      };
                       mode = mkOption {
                         type = types.nullOr (
                           types.enum [
@@ -2572,8 +2568,8 @@ in
           agents = filterAgents aiTools.claudeCode.agents;
           commands = filterCommands aiTools.claudeCode.commands;
           skills = filterSkills aiTools.claudeCode.skills;
-          context = mkDefault instructions;
         }
+        (mkIf (cfg.instructions != "") { context = mkDefault cfg.instructions; })
         cfg.tools.claudeCode.program
       ];
     })
@@ -2588,9 +2584,9 @@ in
           enable = true;
           package = mkDefault llmAgents.codex;
           settings = mkDefault codexSettings;
-          context = mkDefault instructions;
           skills = codexSkills;
         }
+        (mkIf (cfg.instructions != "") { context = mkDefault cfg.instructions; })
         cfg.tools.codex.program
       ];
     })
@@ -2606,12 +2602,12 @@ in
         {
           enable = true;
           package = mkDefault defaultOpencodePackage;
-          context = mkDefault opencodeRules;
           settings = mkDefault opencodeSettings;
           agents = filterAgents aiTools.opencode.agents;
           commands = filterCommands aiTools.opencode.commands;
           skills = filterSkills aiTools.claudeCode.skills;
         }
+        (mkIf (cfg.instructions != "") { context = mkDefault cfg.instructions; })
         cfg.tools.opencode.program
       ];
     })
