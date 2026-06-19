@@ -74,7 +74,7 @@ let
           fi
         done
         rm -rf "''${managed_paths[@]}"
-        cp -a "${homeConfiguration.activationPackage}/home-files/." "$dev_home/"
+        cp -aL "${homeConfiguration.activationPackage}/home-files/." "$dev_home/"
         chmod -R u+w "$dev_home"
         for managed_path in "''${managed_paths[@]}"; do
           if [ -e "$managed_path" ]; then
