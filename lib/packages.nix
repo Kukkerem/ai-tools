@@ -66,8 +66,6 @@ let
 
   opencodeHelperPackages = [ ];
 
-  ompHelperPackages = [ ];
-
   opencodeRuntimePackages = [
     pkgs.bash-language-server
     pkgs.nixfmt
@@ -129,7 +127,6 @@ in
     codexHelperPackages
     defaultPackages
     mcpRuntimePackages
-    ompHelperPackages
     opencodeHelperPackages
     opencodeRuntimePackages
     serenaRustPackages
@@ -144,6 +141,4 @@ in
     default = mkBundle "ai-tools" defaultPackages;
     mcp = mkBundle "ai-tools-mcp" mcpRuntimePackages;
   };
-
-  devShellPackages = lib.unique (defaultPackages ++ [ pkgs.home-manager ]);
 }
