@@ -16,6 +16,20 @@ programs.ai-tools = {
 };
 ```
 
+## System prompt
+
+Nothing is injected into a tool's context by default — each tool keeps its own defaults. To share a system prompt across every enabled tool, set `instructions`:
+
+```nix
+programs.ai-tools.instructions = builtins.readFile ./system-prompt.md;
+```
+
+See [`examples/home-manager`](./examples/home-manager) for a sample prompt file.
+
+## Examples
+
+Full, buildable reference configurations live in [`examples/`](./examples): [`home-manager/`](./examples/home-manager) (standalone Home Manager), [`nixos/`](./examples/nixos) (NixOS module), and [`local-dev/`](./examples/local-dev) (project-local `nix develop`). Copy one and adapt it, or cherry-pick options.
+
 ## AI Coding Agents
 
 | Agent | Module path | Wrapper | Supports |
@@ -36,7 +50,7 @@ All four share the same agents, commands, and skills from `ai-tools/`. Each tool
 | `sequential-thinking` | Local | — |
 | `git` | Local | — |
 | `context7` | Local | — |
-| `nixos` | Local | NixOS config path |
+| `nixos` | Local | — |
 | `time` | Local | — |
 | `fetch` | Local | — |
 | `memory` | Local | Memory dir |
@@ -49,7 +63,7 @@ All four share the same agents, commands, and skills from `ai-tools/`. Each tool
 | `qmd` | Remote | URL |
 | `deepwiki` | Remote | — |
 | `exa` | Remote | — |
-| `openrouter-search` | Mixed | API key or env var |
+| `openrouter-search` | Local | API key or env var |
 
 ```nix
 programs.ai-tools.mcp = {
@@ -98,11 +112,11 @@ programs.ai-tools.mcp.servers.openrouter-search = {
 
 ## Skills
 
-40 bundled skills, discovered by all four agents:
+42 bundled skills, discovered by all four agents:
 
 | Skill | Description |
 |-------|-------------|
-| Base (6) | agent-browser, dcp, basic-memory, notebooklm, rtk, karpathy-guidelines |
+| Base (8) | agent-browser, dcp, basic-memory, notebooklm, rtk, karpathy-guidelines, gog, terraform |
 | Caveman variants (7) | caveman, caveman-commit, caveman-review, caveman-help, caveman-compress, caveman-stats, cavecrew |
 | Matt Pocock (13) | diagnose, grill-with-docs, triage, improve-codebase-architecture, setup-matt-pocock-skills, tdd, to-issues, to-prd, zoom-out, prototype, grill-me, handoff, write-a-skill |
 | Superpowers (14) | brainstorming, dispatching-parallel-agents, executing-plans, finishing-a-development-branch, receiving-code-review, requesting-code-review, subagent-driven-development, systematic-debugging, test-driven-development, using-git-worktrees, using-superpowers, verification-before-completion, writing-plans, writing-skills |
@@ -111,7 +125,7 @@ programs.ai-tools.mcp.servers.openrouter-search = {
 
 22 bundled slash commands:
 
-**Nix** — `refactor`, `flake-update`, `module-scaffold`, `option-migrate`, `template-new`, `nix-check`
+**Nix** — `nix-refactor`, `flake-update`, `module-scaffold`, `option-migrate`, `template-new`, `nix-check`
 
 **Git** — `add-and-format`, `review`, `commit-msg`, `commit-changes`
 
@@ -119,17 +133,17 @@ programs.ai-tools.mcp.servers.openrouter-search = {
 
 **Project** — `changelog`
 
-**PRD** — `create-prds`, `generate-tasks`, `process-task-list`
+**PRD** — `generate-prds`, `generate-tasks`, `process-task-list`
 
 **Caveman** — `caveman`, `caveman-commit`, `caveman-review`
 
 ## Agents
 
-8 specialized sub-agents:
+10 specialized sub-agents:
 
 **General** — `code-reviewer`, `documenter`, `security-auditor`
 
-**Nix** — `nix-expert`, `flake-expert`, `module-expert`
+**Nix** — `nix-expert`, `flake-expert`, `nix-module-expert`, `nix-builder`, `nix-linter`
 
 **Project** — `template-designer`, `system-config-expert`
 
@@ -243,8 +257,9 @@ programs.ai-tools.tools.omp = {
       # globs = [ "secrets/**" ];
     };
     pathAccess = {
-      enable = true;        # default: true
-      mode = "ask";         # "ask", "block", or "allow"
+      # No enable flag: path access is part of the protected-paths hook (needs
+      # protectedPaths.enable = true). Set mode = "allow" to turn it off.
+      mode = "ask";         # "ask" prompts; "block" denies; "allow" disables
       # Both lists accept absolute paths or ~ (expanded to $HOME).
       allowPaths = [ "/nix/store" ];
       denyPaths = [ "~/.ssh" "~/.gnupg" ];
@@ -310,7 +325,7 @@ programs.ai-tools.nixos = {
 ### Scaffolding
 
 ```bash
-nix flake init -t github:zolszabo/ai-tools#local-dev
+nix flake init -t github:Kukkerem/ai-tools#local-dev
 nix develop
 ```
 
@@ -374,6 +389,7 @@ Wrap the HM module for system-wide use:
 | `packages.<system>.omp` | omp (oh-my-pi) binary |
 | `packages.<system>.mcp` | MCP runtime bundle |
 | `lib.mkAiToolsDevShell` | Dev shell builder |
+| `lib.mkAiToolsDevshellConfig` | Dev shell config builder (flake-parts module) |
 | `templates.local-dev` | Quick-start template |
 
 ## Binary Caches
@@ -400,4 +416,4 @@ nix.settings = {
 
 Bumps version in `flake.nix`, commits, tags, and pushes. GitHub Actions builds and publishes to Cachix, creates GitHub release with changelog from `git-cliff`.
 
-Flake inputs update weekly via automated PRs from `.github/workflows/update-flake-inputs.yml`.
+Flake inputs update weekly via automated PRs from `.github/workflows/update-flake-lock.yml`.

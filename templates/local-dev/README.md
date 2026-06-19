@@ -7,7 +7,7 @@ a `nix develop` dev shell or as a Home Manager module.
 
 ```bash
 # Copy the template into your project
-nix flake init -t github:zolszabo/ai-tools#local-dev
+nix flake init -t github:Kukkerem/ai-tools#local-dev
 
 # Enter the dev shell (project-local AI home, no system changes)
 nix develop
@@ -41,7 +41,7 @@ home.homeDirectory = "/home/your-username"; # or /Users/your-username on macOS
 
 ## Customising
 
-All options are documented in the [ai-tools README](https://github.com/zolszabo/ai-tools#readme).
+All options are documented in the [ai-tools README](https://github.com/Kukkerem/ai-tools#readme).
 
 ### Enable additional MCP servers
 

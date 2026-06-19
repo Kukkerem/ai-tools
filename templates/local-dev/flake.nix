@@ -7,7 +7,7 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    ai-tools.url = "github:zolszabo/ai-tools";
+    ai-tools.url = "github:Kukkerem/ai-tools";
   };
 
   outputs =
