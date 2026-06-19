@@ -68,7 +68,7 @@
     let
       # Bumped by scripts/release.sh on each release tag.
       # Keep in sync with the git tag: v<version>.
-      version = "0.1.10";
+      version = "0.2.0";
 
       systems = [
         "x86_64-linux"
