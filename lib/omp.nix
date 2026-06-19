@@ -162,16 +162,6 @@ let
       inherit extensions disabledExtensions;
     } extraConfig;
 
-  mkOmpModels =
-    {
-      providers ? { },
-      equivalence ? { },
-    }:
-    filterAttrs (_: v: v != { } && v != [ ]) {
-      providers = if providers != { } then providers else { };
-      equivalence = if equivalence != { } then equivalence else { };
-    };
-
   mkOmpWrapper =
     profile: runMode:
     let
@@ -227,7 +217,7 @@ let
       flags = "i";
     }
     {
-      pattern = "\\b:(){ :|:& };:";
+      pattern = ":\\(\\)\\s*\\{\\s*:\\s*\\|\\s*:\\s*&\\s*\\}\\s*;\\s*:";
       flags = "";
     }
     {
@@ -244,10 +234,6 @@ let
     }
     {
       pattern = "\\bbrew\\b";
-      flags = "i";
-    }
-    {
-      pattern = "\\bdocker\\s+inspect\\b";
       flags = "i";
     }
     {
@@ -481,9 +467,10 @@ let
       modeAsk = mode == "ask";
       reasonPrefix = if protectReads then "Protected path: accessing " else "Protected path: writing to ";
       pathAccessBlock = pathAccessMode == "block";
+      pathAccessAsk = pathAccessMode == "ask";
     in
     ''
-      ${lib.optionalString modeAsk (mkGrantsHelper {
+      ${lib.optionalString (modeAsk || pathAccessAsk) (mkGrantsHelper {
         grantNamespace = "protectedPaths";
       })}
 
@@ -568,7 +555,9 @@ let
       var _promptQueue: Promise<any> = Promise.resolve()
 
       export default (pi) => {
-        pi.on("tool_call", ${if modeAsk then "async function" else "function"} (call, ctx) {
+        pi.on("tool_call", ${
+          if (modeAsk || pathAccessAsk) then "async function" else "function"
+        } (call, ctx) {
           ${readToolGuard}
 
           const rawFp = getToolPath(call)
@@ -626,7 +615,28 @@ let
             if pathAccessBlock then
               ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }''
             else
-              ''return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace. Add to allowPaths or grants.json to permit." }''
+              ''
+                var pgrant = checkGrant(absFp)
+                if (pgrant) return
+                if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }
+                return new Promise((resolve) => {
+                  _promptQueue = _promptQueue.then(async () => {
+                    var pg = checkGrant(absFp)
+                    if (pg) { resolve(undefined); return }
+                    var pchoice = await ctx.ui.select("Path Access: " + absFp + " is outside the workspace. Allow access?", [
+                      "Allow once",
+                      "Allow for session",
+                      "Always allow",
+                      "Deny"
+                    ])
+                    if (!pchoice || pchoice === "Deny") { resolve({ block: true, reason: "Path access denied: " + absFp }); return }
+                    if (pchoice === "Allow once") { resolve(undefined); return }
+                    var pscope = pchoice === "Always allow" ? "always" : "session"
+                    saveGrant(absFp, pscope)
+                    resolve(undefined)
+                  })
+                })
+              ''
           }
         }
       ''}
@@ -701,34 +711,6 @@ let
     "~/.gnupg"
   ];
 
-  hooks = {
-    permissionGate = mkPermissionGateHook { };
-    protectedPaths = mkProtectedPathsHook { };
-  };
-
-  mkYamlConfig =
-    profile:
-    let
-      config = mkOmpConfig profile;
-      models = mkOmpModels profile;
-    in
-    {
-      "agent/config.yml".text = yamlFormat.generate "omp-config" config;
-      "agent/models.yml".text = yamlFormat.generate "omp-models" models;
-    };
-
-  mkHookFile =
-    profileName: hookName: hookContent:
-    nameValuePair "${profileName}/agent/extensions/${hookName}.ts" { text = hookContent; };
-
-  mkProfileHookFiles =
-    profileName: enabledHooks:
-    builtins.listToAttrs (
-      mapAttrsToList (hookName: _: mkHookFile profileName hookName hooks.${hookName}) (
-        filterAttrs (_: enabled: enabled) enabledHooks
-      )
-    );
-
 in
 {
   inherit
@@ -737,16 +719,10 @@ in
     defaultProtectedPathGlobs
     defaultPathAccessAllowPaths
     defaultPathAccessDenyPaths
-    hooks
     mkGrantsHelper
     mkPermissionGateHook
     mkProtectedPathsHook
     mkOmpConfig
-    mkOmpModels
     mkOmpWrapper
-    mkYamlConfig
-    mkProfileHookFiles
     ;
-
-  configSuffix = "agent";
 }

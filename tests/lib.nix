@@ -311,10 +311,26 @@ let
       expr =
         let
           omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
-          hook = omp.mkProtectedPathsHook { mode = "block"; };
+          hook = omp.mkProtectedPathsHook {
+            mode = "block";
+            pathAccessMode = "block";
+          };
         in
         builtins.match ".*block: true.*Protected path:.*" hook != null
         && builtins.match ".*ctx\\.ui\\.select.*" hook == null;
+      expected = true;
+    };
+
+    testPathAccessAskModePrompts = {
+      expr =
+        let
+          omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+          hook = omp.mkProtectedPathsHook {
+            mode = "block";
+            pathAccessMode = "ask";
+          };
+        in
+        builtins.match ".*ctx\\.ui\\.select.*is outside the workspace.*" hook != null;
       expected = true;
     };
 
@@ -326,7 +342,6 @@ let
         in
         lib.all (pattern: builtins.elem pattern patternTexts) [
           "\\bbrew\\b"
-          "\\bdocker\\s+inspect\\b"
           "\\bterraform\\s+apply\\b"
           "\\bterraform\\s+destroy\\b"
           "\\bkubectl\\s+delete\\b"
