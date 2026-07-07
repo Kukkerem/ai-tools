@@ -394,13 +394,23 @@ let
             var grant = checkGrant(command)
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
-            var choice = await ctx.ui.select("Permission Gate: " + command + " may be dangerous.", [
-              "Allow once",
-              "Allow for session",
-              "Always allow",
-              "Deny"
-            ])
-            if (!choice || choice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (!ctx.ui || typeof ctx.ui.select !== "function") return { block: true, reason: "Permission gate blocked: command matches dangerous pattern" }
+            var choice = await queuedPrompt(PROMPT_TIMEOUT_MS, function (finish) {
+              if (checkGrant(command)) { finish("__GRANTED__"); return }
+              return Promise.resolve()
+                .then(function () {
+                  return ctx.ui.select("Permission Gate: " + command + " may be dangerous.", [
+                    "Allow once",
+                    "Allow for session",
+                    "Always allow",
+                    "Deny"
+                  ])
+                })
+                .then(function (c) { finish(c) }, function () { finish(null) })
+            })
+            if (choice === "__GRANTED__") return
+            if (!choice) return { block: true, reason: "Permission gate blocked: command matches dangerous pattern (approval prompt unavailable or timed out — re-run to retry)" }
+            if (choice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
             if (choice === "Allow once") return
             var scope = choice === "Always allow" ? "always" : "session"
             saveGrant(command, scope)
@@ -421,13 +431,23 @@ let
             var cmdGrant = checkGrant(firstWord)
             if (cmdGrant) return
             if (!ctx.hasUI) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
-            var cmdChoice = await ctx.ui.select("Permission Gate: " + firstWord + " is not allowed. Command: " + command, [
-              "Allow once",
-              "Allow for session",
-              "Always allow",
-              "Deny"
-            ])
-            if (!cmdChoice || cmdChoice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
+            if (!ctx.ui || typeof ctx.ui.select !== "function") return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed" }
+            var cmdChoice = await queuedPrompt(PROMPT_TIMEOUT_MS, function (finish) {
+              if (checkGrant(firstWord)) { finish("__GRANTED__"); return }
+              return Promise.resolve()
+                .then(function () {
+                  return ctx.ui.select("Permission Gate: " + firstWord + " is not allowed. Command: " + command, [
+                    "Allow once",
+                    "Allow for session",
+                    "Always allow",
+                    "Deny"
+                  ])
+                })
+                .then(function (c) { finish(c) }, function () { finish(null) })
+            })
+            if (cmdChoice === "__GRANTED__") return
+            if (!cmdChoice) return { block: true, reason: "Permission gate blocked: " + firstWord + " is not allowed (approval prompt unavailable or timed out — re-run to retry)" }
+            if (cmdChoice === "Deny") return { block: true, reason: "Permission gate: user denied command" }
             if (cmdChoice === "Allow once") return
             var cmdScope = cmdChoice === "Always allow" ? "always" : "session"
             saveGrant(firstWord, cmdScope)
@@ -552,8 +572,6 @@ let
         return false
       }
 
-      var _promptQueue: Promise<any> = Promise.resolve()
-
       export default (pi) => {
         pi.on("tool_call", ${
           if (modeAsk || pathAccessAsk) then "async function" else "function"
@@ -573,24 +591,28 @@ let
             var grant = checkGrant(fp)
             if (grant) return
             if (!ctx.hasUI) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
-            return new Promise((resolve) => {
-              _promptQueue = _promptQueue.then(async () => {
-                // Re-check grants after queue — previous prompt may have granted
-                var g = checkGrant(fp)
-                if (g) { resolve(undefined); return }
-                var choice = await ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
-                  "Allow once",
-                  "Allow for session",
-                  "Always allow",
-                  "Deny"
-                ])
-                if (!choice || choice === "Deny") { resolve({ block: true, reason: "Protected path: user denied " + fp }); return }
-                if (choice === "Allow once") { resolve(undefined); return }
-                var scope = choice === "Always allow" ? "always" : "session"
-                saveGrant(fp, scope)
-                resolve(undefined)
-              })
+            if (!ctx.ui || typeof ctx.ui.select !== "function") return { block: true, reason: "${reasonPrefix}" + fp + " is blocked" }
+            var choice = await queuedPrompt(PROMPT_TIMEOUT_MS, function (finish) {
+              // Re-check grants after the queue — a prior prompt may have granted
+              if (checkGrant(fp)) { finish("__GRANTED__"); return }
+              return Promise.resolve()
+                .then(function () {
+                  return ctx.ui.select("Protected Path: " + "${reasonPrefix}" + fp + " is blocked. Allow access?", [
+                    "Allow once",
+                    "Allow for session",
+                    "Always allow",
+                    "Deny"
+                  ])
+                })
+                .then(function (c) { finish(c) }, function () { finish(null) })
             })
+            if (choice === "__GRANTED__") return
+            if (!choice) return { block: true, reason: "${reasonPrefix}" + fp + " is blocked (approval prompt unavailable or timed out — re-run to retry)" }
+            if (choice === "Deny") return { block: true, reason: "Protected path: user denied " + fp }
+            if (choice === "Allow once") return
+            var scope = choice === "Always allow" ? "always" : "session"
+            saveGrant(fp, scope)
+            return
           ''
         else
           ''
@@ -619,23 +641,26 @@ let
                 var pgrant = checkGrant(absFp)
                 if (pgrant) return
                 if (!ctx.hasUI) return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }
-                return new Promise((resolve) => {
-                  _promptQueue = _promptQueue.then(async () => {
-                    var pg = checkGrant(absFp)
-                    if (pg) { resolve(undefined); return }
-                    var pchoice = await ctx.ui.select("Path Access: " + absFp + " is outside the workspace. Allow access?", [
-                      "Allow once",
-                      "Allow for session",
-                      "Always allow",
-                      "Deny"
-                    ])
-                    if (!pchoice || pchoice === "Deny") { resolve({ block: true, reason: "Path access denied: " + absFp }); return }
-                    if (pchoice === "Allow once") { resolve(undefined); return }
-                    var pscope = pchoice === "Always allow" ? "always" : "session"
-                    saveGrant(absFp, pscope)
-                    resolve(undefined)
-                  })
+                if (!ctx.ui || typeof ctx.ui.select !== "function") return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace" }
+                var pchoice = await queuedPrompt(PROMPT_TIMEOUT_MS, function (finish) {
+                  if (checkGrant(absFp)) { finish("__GRANTED__"); return }
+                  return Promise.resolve()
+                    .then(function () {
+                      return ctx.ui.select("Path Access: " + absFp + " is outside the workspace. Allow access?", [
+                        "Allow once",
+                        "Allow for session",
+                        "Always allow",
+                        "Deny"
+                      ])
+                    })
+                    .then(function (c) { finish(c) }, function () { finish(null) })
                 })
+                if (pchoice === "__GRANTED__") return
+                if (!pchoice) return { block: true, reason: "Path access blocked: " + absFp + " is outside workspace (approval prompt unavailable or timed out — re-run to retry)" }
+                if (pchoice === "Deny") return { block: true, reason: "Path access denied: " + absFp }
+                if (pchoice === "Allow once") return
+                var pscope = pchoice === "Always allow" ? "always" : "session"
+                saveGrant(absFp, pscope)
               ''
           }
         }
@@ -700,6 +725,33 @@ let
       }
 
       loadGrants()
+
+      var _promptQueue: Promise<any> = Promise.resolve()
+      var PROMPT_TIMEOUT_MS = 25000
+
+      // queuedPrompt runs task once it reaches the front of the queue, so only
+      // one ctx.ui.select shows at a time. It resolves with whatever task passes
+      // to finish, or null when no answer arrives before deadlineMs (kept well
+      // under the runtime 30s tool_call handler cap) — so the handler never times
+      // out and a failed or unanswered prompt never leaves the queue rejected.
+      function queuedPrompt(deadlineMs, task): Promise<any> {
+        return new Promise((resolve) => {
+          var settled = false
+          var timer
+          function finish(v) {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve(v)
+          }
+          timer = setTimeout(function () { finish(null) }, deadlineMs)
+          var link = _promptQueue.then(function () {
+            if (settled) return
+            return task(finish)
+          })
+          _promptQueue = link.then(function () {}, function () {})
+        })
+      }
     '';
 
   defaultPathAccessAllowPaths = [
