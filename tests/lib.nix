@@ -12,6 +12,15 @@ let
 
   omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
 
+  # Read a frontmatter field out of a rendered omp agent markdown file.
+  ompAgentField =
+    name: key:
+    let
+      fm = lib.elemAt (lib.splitString "---" aiTools.omp.agents.${name}) 1;
+      line = lib.findFirst (l: lib.hasPrefix "${key}: " l) "" (lib.splitString "\n" fm);
+    in
+    lib.removePrefix "${key}: " line;
+
   protectedPathsRuntimeHook = pkgs.writeText "protected-paths-runtime.ts" (
     omp.mkProtectedPathsHook {
       mode = "ask";
@@ -164,6 +173,57 @@ let
     testAgentGroupsFlattenToClaudeAgents = {
       expr = lib.foldl' lib.recursiveUpdate { } (builtins.attrValues aiTools.agentGroups);
       expected = aiTools.claudeCode.agents;
+    };
+
+    # omp's frontmatter parser accepts only an array or a CSV string, so the
+    # nested map the agents are authored with must be flattened for omp. It read
+    # as "no tools declared", silently giving every agent the full default
+    # subagent toolset.
+    testOmpAgentToolsRenderAsCsv = {
+      expr = ompAgentField "nix-expert" "tools";
+      expected = "bash, read, write, edit, glob, grep, lsp";
+    };
+
+    # Claude Code tool names are mapped onto omp's canonical ones.
+    testOmpAgentToolsUseCanonicalNames = {
+      expr = lib.hasInfix "find" (ompAgentField "nix-expert" "tools");
+      expected = false;
+    };
+
+    # checkpoint/rewind are opt-in only: omp exposes them to a subagent solely
+    # when the agent names them explicitly.
+    testOmpAgentToolsGrantCheckpointPair = {
+      expr = ompAgentField "nix-builder" "tools";
+      expected = "bash, read, glob, grep, checkpoint, rewind";
+    };
+
+    testOmpAgentToolsOmitCheckpointByDefault = {
+      expr = lib.hasInfix "checkpoint" (ompAgentField "documenter" "tools");
+      expected = false;
+    };
+
+    # omp drops an agent whose frontmatter lacks name or description.
+    testOmpAgentPreservesRequiredFields = {
+      expr = [
+        (ompAgentField "code-reviewer" "name")
+        (ompAgentField "code-reviewer" "description")
+      ];
+      expected = [
+        "code-reviewer"
+        "Specialized code review agent for development tasks"
+      ];
+    };
+
+    # The conversion is omp-only: Claude Code still receives the nested map, and
+    # checkpoint/rewind (which it has no equivalent for) never leak into it.
+    testClaudeCodeAgentsKeepNestedToolsMap = {
+      expr = lib.hasInfix "  bash: allow" aiTools.claudeCode.agents.nix-builder;
+      expected = true;
+    };
+
+    testClaudeCodeAgentsOmitOmpOnlyTools = {
+      expr = lib.hasInfix "checkpoint" aiTools.claudeCode.agents.nix-builder;
+      expected = false;
     };
 
     testRtkConfigRendersToml = {

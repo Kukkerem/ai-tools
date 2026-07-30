@@ -305,6 +305,67 @@ let
     if split.frontmatter == "" then agentText else "---\n${newFm}\n---\n\n${split.body}";
   convertAgentsToOpenCode = agents: mapAttrs convertAgentToOpenCode agents;
 
+  # ── Agent: Claude Code → omp ──
+  # omp parses the frontmatter `tools:` field with `parseArrayOrCSV`, which
+  # accepts an array or a CSV string and returns nothing for anything else. The
+  # nested map the agents are authored with therefore reads as *absent*, so every
+  # agent silently inherited omp's full default subagent toolset instead of its
+  # declared one. Flatten the map into the CSV form omp expects, mapping the
+  # Claude Code tool names onto omp's canonical ones.
+  #
+  # A present `tools:` list is also what omp treats as an explicit tool request,
+  # which is the only thing that unlocks its opt-in-only subagent tools (see
+  # `ompAgentExtraTools`). Note the second effect: an explicit request also keeps
+  # the declared built-ins presented top-level instead of mounted under `xd://`.
+  _ompToolMap = {
+    find = "glob";
+    search = "grep";
+  };
+
+  # omp-only tools appended per agent. They have no Claude Code or OpenCode
+  # equivalent, so they must not sit in the shared agent frontmatter.
+  # `checkpoint`/`rewind` are excluded from omp's default subagent toolset and
+  # only become available when named explicitly (min omp 17.2.0, plus the
+  # `checkpoint.enabled` master toggle). omp silently filters any requested tool
+  # that is unknown or not permitted at subagent depth, so listing these ahead of
+  # a version bump is inert rather than an error. Granted to the
+  # investigate-and-report agents, whose long tool-output transcripts are what
+  # checkpoint/rewind exist to compress.
+  ompAgentExtraTools = {
+    code-reviewer = [
+      "checkpoint"
+      "rewind"
+    ];
+    nix-builder = [
+      "checkpoint"
+      "rewind"
+    ];
+    nix-linter = [
+      "checkpoint"
+      "rewind"
+    ];
+    security-auditor = [
+      "checkpoint"
+      "rewind"
+    ];
+  };
+
+  convertAgentToOmp =
+    name: agentText:
+    let
+      split = _splitFrontmatter agentText;
+      fm = _parseFrontmatter split.frontmatter;
+      declaredStr = lib.trim (fm.tools or "");
+      declared = if declaredStr == "" then [ ] else map lib.trim (lib.splitString "," declaredStr);
+      mapped = map (tool: _ompToolMap.${tool} or tool) declared;
+      tools = lib.unique (mapped ++ (ompAgentExtraTools.${name} or [ ]));
+      # An agent that declares no tools keeps omp's default toolset: an empty
+      # value is dropped by _rebuildFrontmatter rather than emitted as `tools:`.
+      newFm = _rebuildFrontmatter (fm // { tools = lib.concatStringsSep ", " tools; });
+    in
+    if split.frontmatter == "" then agentText else "---\n${newFm}\n---\n\n${split.body}";
+  convertAgentsToOmp = agents: mapAttrs convertAgentToOmp agents;
+
   # ── Command: Claude Code → OpenCode ──
   convertCommandToOpenCode =
     name: cmdText:
@@ -363,10 +424,12 @@ in
 
   # omp discovers skills/agents/commands via filesystem under
   # .omp/{skills,agents,commands}/, with the same Markdown structure
-  # as claude-code. No YAML conversion needed.
+  # as claude-code. Commands need no conversion; agents do, because omp's
+  # frontmatter `tools:` parser accepts only an array or a CSV string and
+  # silently ignores the nested map form (see convertAgentToOmp).
   omp = {
     commands = aiCommands;
-    agents = aiAgents;
+    agents = convertAgentsToOmp aiAgents;
     skills = aiSkills;
     skillFiles = aiSkillFiles;
   };
