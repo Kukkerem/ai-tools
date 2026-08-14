@@ -220,22 +220,24 @@ let
     # omp 17.2.15 bundles exactly these seven; the `explore` agent this
     # frontmatter used to name was renamed `scout`.
     testOmpAgentSpawnsNameBundledAgents = {
-      expr = lib.subtractLists [
-        "task"
-        "scout"
-        "sonic"
-        "reviewer"
-        "designer"
-        "security-reviewer"
-        "librarian"
-      ] (
-        lib.unique (
-          lib.concatMap (
-            name:
-            map lib.trim (lib.filter (s: s != "") (lib.splitString "," (ompAgentField name "spawns")))
-          ) (lib.attrNames aiTools.omp.agents)
-        )
-      );
+      expr =
+        lib.subtractLists
+          [
+            "task"
+            "scout"
+            "sonic"
+            "reviewer"
+            "designer"
+            "security-reviewer"
+            "librarian"
+          ]
+          (
+            lib.unique (
+              lib.concatMap (
+                name: map lib.trim (lib.filter (s: s != "") (lib.splitString "," (ompAgentField name "spawns")))
+              ) (lib.attrNames aiTools.omp.agents)
+            )
+          );
       expected = [ ];
     };
 
