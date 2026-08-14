@@ -9,7 +9,7 @@
       find: allow
       search: allow
       lsp: allow
-    spawns: explore
+    spawns: scout
     ---
 
     <code_review>

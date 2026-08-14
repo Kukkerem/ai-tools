@@ -8,7 +8,7 @@
       read: allow
       find: allow
       search: allow
-    spawns: explore
+    spawns: scout
     ---
 
     <security_assessment>

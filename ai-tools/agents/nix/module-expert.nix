@@ -11,7 +11,7 @@
       find: allow
       search: allow
       lsp: allow
-    spawns: explore
+    spawns: scout
     ---
 
     <module_expertise>
