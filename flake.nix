@@ -50,7 +50,7 @@
     };
 
     mattpocock-skills = {
-      url = "github:mattpocock/skills/6eeb81b5fcfeeb5bd531dd47ab2f9f2bbea27461";
+      url = "github:mattpocock/skills/8b78b531ab965735c5dc74f6f7a219e1e37326df";
       flake = false;
     };
 
