@@ -112,13 +112,13 @@ programs.ai-tools.mcp.servers.openrouter-search = {
 
 ## Skills
 
-42 bundled skills, discovered by all four agents:
+41 bundled skills, discovered by all four agents:
 
 | Skill | Description |
 |-------|-------------|
 | Base (8) | agent-browser, dcp, basic-memory, notebooklm, rtk, karpathy-guidelines, gog, terraform |
 | Caveman variants (7) | caveman, caveman-commit, caveman-review, caveman-help, caveman-compress, caveman-stats, cavecrew |
-| Matt Pocock (13) | diagnose, grill-with-docs, triage, improve-codebase-architecture, setup-matt-pocock-skills, tdd, to-issues, to-prd, zoom-out, prototype, grill-me, handoff, write-a-skill |
+| Matt Pocock (12) | diagnose, grill-with-docs, triage, improve-codebase-architecture, setup-matt-pocock-skills, tdd, to-tickets, to-spec, prototype, grill-me, handoff, writing-for-agents |
 | Superpowers (14) | brainstorming, dispatching-parallel-agents, executing-plans, finishing-a-development-branch, receiving-code-review, requesting-code-review, subagent-driven-development, systematic-debugging, test-driven-development, using-git-worktrees, using-superpowers, verification-before-completion, writing-plans, writing-skills |
 
 ## Commands

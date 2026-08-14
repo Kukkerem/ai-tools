@@ -58,12 +58,12 @@ in
   improve-codebase-architecture = mattpocockSkillFiles "engineering" "improve-codebase-architecture";
   setup-matt-pocock-skills = mattpocockSkillFiles "engineering" "setup-matt-pocock-skills";
   tdd = mattpocockSkillFiles "engineering" "tdd";
-  to-issues = mattpocockSkillFiles "engineering" "to-issues";
-  to-prd = mattpocockSkillFiles "engineering" "to-prd";
+  to-tickets = mattpocockSkillFiles "engineering" "to-tickets";
+  to-spec = mattpocockSkillFiles "engineering" "to-spec";
   prototype = mattpocockSkillFiles "engineering" "prototype";
   grill-me = mattpocockSkillFiles "productivity" "grill-me";
   handoff = mattpocockSkillFiles "productivity" "handoff";
-  write-a-skill = mattpocockSkillFiles "productivity" "writing-great-skills";
+  writing-for-agents = mattpocockSkillFiles "productivity" "writing-for-agents";
 
   brainstorming = superpowersSkillFiles "brainstorming";
   dispatching-parallel-agents = superpowersSkillFiles "dispatching-parallel-agents";

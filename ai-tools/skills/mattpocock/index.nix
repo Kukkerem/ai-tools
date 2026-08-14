@@ -12,15 +12,15 @@ let
     improve-codebase-architecture = readSkill "engineering" "improve-codebase-architecture";
     setup-matt-pocock-skills = readSkill "engineering" "setup-matt-pocock-skills";
     tdd = readSkill "engineering" "tdd";
-    to-issues = readSkill "engineering" "to-issues";
-    to-prd = readSkill "engineering" "to-prd";
+    to-tickets = readSkill "engineering" "to-tickets";
+    to-spec = readSkill "engineering" "to-spec";
     prototype = readSkill "engineering" "prototype";
   };
 
   productivitySkills = {
     grill-me = readSkill "productivity" "grill-me";
     handoff = readSkill "productivity" "handoff";
-    write-a-skill = readSkill "productivity" "writing-great-skills";
+    writing-for-agents = readSkill "productivity" "writing-for-agents";
   };
 in
 engineeringSkills // productivitySkills

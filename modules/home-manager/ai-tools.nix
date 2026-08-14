@@ -196,13 +196,12 @@ let
     "improve-codebase-architecture"
     "setup-matt-pocock-skills"
     "tdd"
-    "to-issues"
-    "to-prd"
-    "zoom-out"
+    "to-tickets"
+    "to-spec"
     "prototype"
     "grill-me"
     "handoff"
-    "write-a-skill"
+    "writing-for-agents"
   ];
 
   superpowersSkillNames = [
