@@ -52,7 +52,7 @@ in
   caveman-stats = pathBackedSkillFiles "caveman-stats";
   cavecrew = pathBackedSkillFiles "cavecrew";
 
-  diagnose = mattpocockSkillFiles "engineering" "diagnose";
+  diagnose = mattpocockSkillFiles "engineering" "diagnosing-bugs";
   grill-with-docs = mattpocockSkillFiles "engineering" "grill-with-docs";
   triage = mattpocockSkillFiles "engineering" "triage";
   improve-codebase-architecture = mattpocockSkillFiles "engineering" "improve-codebase-architecture";
@@ -60,11 +60,10 @@ in
   tdd = mattpocockSkillFiles "engineering" "tdd";
   to-issues = mattpocockSkillFiles "engineering" "to-issues";
   to-prd = mattpocockSkillFiles "engineering" "to-prd";
-  zoom-out = mattpocockSkillFiles "engineering" "zoom-out";
   prototype = mattpocockSkillFiles "engineering" "prototype";
   grill-me = mattpocockSkillFiles "productivity" "grill-me";
   handoff = mattpocockSkillFiles "productivity" "handoff";
-  write-a-skill = mattpocockSkillFiles "productivity" "write-a-skill";
+  write-a-skill = mattpocockSkillFiles "productivity" "writing-great-skills";
 
   brainstorming = superpowersSkillFiles "brainstorming";
   dispatching-parallel-agents = superpowersSkillFiles "dispatching-parallel-agents";
