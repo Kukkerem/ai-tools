@@ -11,7 +11,7 @@
       find: allow
       search: allow
       lsp: allow
-    spawns: explore
+    spawns: scout
     ---
 
     You are a NixOS system configuration expert specializing in system-level management.

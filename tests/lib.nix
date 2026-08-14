@@ -214,6 +214,33 @@ let
       ];
     };
 
+    # `spawns` is a whitelist omp resolves against real agent names, and its
+    # presence is also what auto-grants the `task` tool. Naming an agent omp
+    # does not bundle therefore hands out `task` with nothing it may spawn.
+    # omp 17.2.15 bundles exactly these seven; the `explore` agent this
+    # frontmatter used to name was renamed `scout`.
+    testOmpAgentSpawnsNameBundledAgents = {
+      expr =
+        lib.subtractLists
+          [
+            "task"
+            "scout"
+            "sonic"
+            "reviewer"
+            "designer"
+            "security-reviewer"
+            "librarian"
+          ]
+          (
+            lib.unique (
+              lib.concatMap (
+                name: map lib.trim (lib.filter (s: s != "") (lib.splitString "," (ompAgentField name "spawns")))
+              ) (lib.attrNames aiTools.omp.agents)
+            )
+          );
+      expected = [ ];
+    };
+
     # The conversion is omp-only: Claude Code still receives the nested map, and
     # checkpoint/rewind (which it has no equivalent for) never leak into it.
     testClaudeCodeAgentsKeepNestedToolsMap = {

@@ -9,7 +9,7 @@
       edit: allow
       find: allow
       search: allow
-    spawns: explore
+    spawns: scout
     ---
 
     <flake_expertise>
