@@ -813,7 +813,6 @@ let
       defaultThinkingLevel = cfg.tools.omp.defaultThinkingLevel;
       hideThinkingBlock = cfg.tools.omp.hideThinkingBlock;
       terminal.showImages = cfg.tools.omp.terminal.showImages;
-      display.tabWidth = cfg.tools.omp.display.tabWidth;
       steeringMode = cfg.tools.omp.steeringMode;
       followUpMode = cfg.tools.omp.followUpMode;
       interruptMode = cfg.tools.omp.interruptMode;
@@ -828,7 +827,6 @@ let
       memories.enabled = cfg.tools.omp.memories.enabled;
       temperature = cfg.tools.omp.temperature;
       topP = cfg.tools.omp.topP;
-      read.lineNumbers = cfg.tools.omp.readLineNumbers;
       edit.mode = cfg.tools.omp.edit.mode;
       lsp = {
         enabled = cfg.tools.omp.lsp.enabled;
@@ -1704,12 +1702,6 @@ in
           description = "Show images inline in the terminal.";
         };
 
-        display.tabWidth = mkOption {
-          type = types.int;
-          default = 3;
-          description = "Tab width in the omp display.";
-        };
-
         steeringMode = mkOption {
           type = types.enum [
             "one-at-a-time"
@@ -1791,12 +1783,6 @@ in
           type = types.float;
           default = -1.0;
           description = "Top-p sampling (-1 = provider default).";
-        };
-
-        readLineNumbers = mkOption {
-          type = types.bool;
-          default = false;
-          description = "Show line numbers in file reads.";
         };
 
         edit.mode = mkOption {
