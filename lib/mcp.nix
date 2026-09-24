@@ -4,7 +4,30 @@
   pkgs,
 }:
 let
-  mcpPackages = inputs.mcp-servers-nix.packages.${pkgs.stdenv.hostPlatform.system};
+  upstreamMcpPackages = inputs.mcp-servers-nix.packages.${pkgs.stdenv.hostPlatform.system};
+
+  # The TypeScript reference servers (sequential-thinking, filesystem, memory)
+  # are built by mcp-servers-nix from one npm workspace with nixpkgs'
+  # `typescript`. Since TS 6.0, `compilerOptions.types` defaults to [ ] and
+  # upstream's tsconfig sets none, so @types/node is dropped and `tsc` fails
+  # with TS2591 on `process` / `node:*`; one failing workspace member fails
+  # all three. nixpkgs packages the same servers with the official TS 6.0
+  # migration (`types = [ "node" ]`), so take those three from nixpkgs.
+  # Drop once mcp-servers-nix builds past reference-servers 2026.8.31.
+  brokenTsServersVersion = "2026.8.31";
+  mcpPackages =
+    lib.warnIf (upstreamMcpPackages.mcp-server-sequential-thinking.version != brokenTsServersVersion)
+      "ai-tools: mcp-servers-nix now ships reference servers ${upstreamMcpPackages.mcp-server-sequential-thinking.version} (broken pin was ${brokenTsServersVersion}); re-test its TypeScript servers and drop the nixpkgs substitution in lib/mcp.nix."
+      (
+        upstreamMcpPackages
+        // {
+          inherit (pkgs)
+            mcp-server-filesystem
+            mcp-server-memory
+            mcp-server-sequential-thinking
+            ;
+        }
+      );
   mcpNixosPackage = inputs.mcp-nixos.packages.${pkgs.stdenv.hostPlatform.system}.default;
   openrouterSearchPackage =
     inputs.mcp-openrouter-search.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -228,6 +251,7 @@ in
 {
   inherit
     basicMemoryPackage
+    mcpPackages
     mcpServerFetchFixed
     mkServers
     notebooklmPackage

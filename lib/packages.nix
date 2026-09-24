@@ -6,9 +6,9 @@
 let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   openclawTools = inputs.nix-openclaw-tools.packages.${pkgs.stdenv.hostPlatform.system};
-  upstreamMcpPackages = inputs.mcp-servers-nix.packages.${pkgs.stdenv.hostPlatform.system};
   mcpNixosPackage = inputs.mcp-nixos.packages.${pkgs.stdenv.hostPlatform.system}.default;
   mcpSupport = import ./mcp.nix { inherit inputs lib pkgs; };
+  inherit (mcpSupport) mcpPackages;
 
   browserPackages =
     lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.chromium ]
@@ -84,14 +84,14 @@ let
     mcpNixosPackage
     pkgs.terraform-mcp-server
     pkgs.uv
-    upstreamMcpPackages.context7-mcp
-    upstreamMcpPackages.mcp-server-filesystem
-    upstreamMcpPackages.mcp-server-git
-    upstreamMcpPackages.mcp-server-memory
-    upstreamMcpPackages.mcp-server-sequential-thinking
-    upstreamMcpPackages.mcp-server-time
-    upstreamMcpPackages.playwright-mcp
-    upstreamMcpPackages.serena
+    mcpPackages.context7-mcp
+    mcpPackages.mcp-server-filesystem
+    mcpPackages.mcp-server-git
+    mcpPackages.mcp-server-memory
+    mcpPackages.mcp-server-sequential-thinking
+    mcpPackages.mcp-server-time
+    mcpPackages.playwright-mcp
+    mcpPackages.serena
   ]
   ++ browserPackages;
 
