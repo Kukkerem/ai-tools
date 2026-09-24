@@ -135,8 +135,8 @@ let
           args = [
             "--executable-path"
           ]
-          ++ lib.optionals pkgs.stdenv.isLinux [ (lib.getExe pkgs.chromium) ]
-          ++ lib.optionals pkgs.stdenv.isDarwin [ (lib.getExe pkgs.google-chrome) ];
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ (lib.getExe pkgs.chromium) ]
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ (lib.getExe pkgs.google-chrome) ];
         };
 
         filesystem = {

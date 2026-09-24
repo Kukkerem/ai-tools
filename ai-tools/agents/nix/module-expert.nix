@@ -33,7 +33,7 @@
     - NixOS vs HM boundary: system daemons and security → NixOS; user preferences and tools → HM.
     - `enable` pattern: wrap config in `mkIf cfg.enable`; set `options.<name>.enable = mkEnableOption`.
     - `imports` for splitting large modules; shared lib functions in a `lib/` directory.
-    - Platform-specific: use `mkIf (pkgs.stdenv.isLinux ...)` or `mkIf (pkgs.stdenv.isDarwin ...)`.
+    - Platform-specific: use `mkIf (pkgs.stdenv.hostPlatform.isLinux ...)` or `mkIf (pkgs.stdenv.hostPlatform.isDarwin ...)`.
 
     **Configuration patterns and precedence:**
     - `mkIf condition config` — conditional blocks; nestable, merges correctly with `mkMerge`.

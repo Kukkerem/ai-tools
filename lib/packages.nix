@@ -11,8 +11,8 @@ let
   mcpSupport = import ./mcp.nix { inherit inputs lib pkgs; };
 
   browserPackages =
-    lib.optionals pkgs.stdenv.isLinux [ pkgs.chromium ]
-    ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.google-chrome ];
+    lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.chromium ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.google-chrome ];
 
   cavemanSkillRuntimePackages = [
     (pkgs.python3.withPackages (ps: [
