@@ -736,20 +736,37 @@ let
       // to finish, or null when no answer arrives before deadlineMs (kept well
       // under the runtime 30s tool_call handler cap) — so the handler never times
       // out and a failed or unanswered prompt never leaves the queue rejected.
+      //
+      // While a prompt is on screen it reports +1/-1 to an optional process-wide
+      // hook, globalThis[Symbol.for("omp.operatorWait")]. Extensions each get
+      // their own ctx.ui, but share globalThis, so this is how a status reporter
+      // (e.g. a Collie beacon) learns the pane is waiting on the operator: these
+      // dialogs fire no tool_approval_requested event. Absent hook = no-op.
       function queuedPrompt(deadlineMs, task): Promise<any> {
         return new Promise((resolve) => {
           var settled = false
+          var waiting = false
           var timer
+          function signal(delta) {
+            try {
+              var hook = globalThis[Symbol.for("omp.operatorWait")]
+              if (typeof hook === "function") hook(delta)
+            } catch (_) {}
+          }
           function finish(v) {
             if (settled) return
             settled = true
             clearTimeout(timer)
+            if (waiting) { waiting = false; signal(-1) }
             resolve(v)
           }
           timer = setTimeout(function () { finish(null) }, deadlineMs)
           var link = _promptQueue.then(function () {
             if (settled) return
-            return task(finish)
+            var pending = task(finish)
+            // A grant re-check settles synchronously; only a real prompt waits.
+            if (!settled) { waiting = true; signal(1) }
+            return pending
           })
           _promptQueue = link.then(function () {}, function () {})
         })
