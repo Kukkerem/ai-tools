@@ -921,6 +921,7 @@ let
         allowPaths = cfg.tools.omp.hooks.pathAccess.allowPaths;
         denyPaths = cfg.tools.omp.hooks.pathAccess.denyPaths;
       };
+      promptTimeout = cfg.tools.omp.hooks.promptTimeout;
       custom = cfg.tools.omp.hooks.custom;
     };
     mcp = {
@@ -991,7 +992,9 @@ let
       hookFiles =
         lib.optionalAttrs (profile.hooks.permissionGate.enable or false) {
           "agent/extensions/permission-gate.ts" = {
-            text = ompSupport.mkPermissionGateHook profile.hooks.permissionGate;
+            text = ompSupport.mkPermissionGateHook (
+              profile.hooks.permissionGate // { inherit (profile.hooks) promptTimeout; }
+            );
           };
         }
         // lib.optionalAttrs (profile.hooks.protectedPaths.enable or false) {
@@ -1001,6 +1004,7 @@ let
               // {
                 allowPaths = profile.hooks.pathAccess.allowPaths or ompSupport.defaultPathAccessAllowPaths;
                 denyPaths = profile.hooks.pathAccess.denyPaths or ompSupport.defaultPathAccessDenyPaths;
+                inherit (profile.hooks) promptTimeout;
                 pathAccessMode = profile.hooks.pathAccess.mode or "ask";
               }
             );
@@ -1921,6 +1925,20 @@ in
               description = "Paths always denied for access.";
             };
           };
+          promptTimeout = mkOption {
+            type = types.ints.positive;
+            default = 25;
+            example = 300;
+            description = ''
+              Seconds an "ask" prompt from the permission gate or protected-paths
+              hook stays open before the call is blocked (the agent reports it and
+              can retry). omp pauses its tool_call handler budget
+              (`extensionHandlers.toolCallTimeoutMs`, 30s by default) while the
+              dialog is on screen, so this is the only limit on an open prompt.
+              A second prompt queued behind an open one is not paused and is still
+              blocked when that budget runs out.
+            '';
+          };
           custom = mkOption {
             type = types.attrsOf types.lines;
             default = { };
@@ -2208,6 +2226,11 @@ in
                         default = null;
                         description = "Per-profile path access denied paths override.";
                       };
+                    };
+                    promptTimeout = mkOption {
+                      type = types.nullOr types.ints.positive;
+                      default = null;
+                      description = "Per-profile gate/path prompt timeout override, in seconds.";
                     };
                     custom = mkOption {
                       type = types.attrsOf types.lines;

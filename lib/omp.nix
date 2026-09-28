@@ -363,6 +363,7 @@ let
       extraBlockedPatterns ? [ ],
       extraBlockedCommands ? [ ],
       mode ? "ask",
+      promptTimeout ? 25,
       ...
     }:
     let
@@ -373,6 +374,7 @@ let
     ''
       ${lib.optionalString modeAsk (mkGrantsHelper {
         grantNamespace = "permissionGate";
+        inherit promptTimeout;
       })}
 
       var BLOCKED_PATTERNS = [
@@ -473,6 +475,7 @@ let
       denyPaths ? defaultPathAccessDenyPaths,
       pathAccessMode ? "ask",
       mode ? "ask",
+      promptTimeout ? 25,
       ...
     }:
     let
@@ -494,6 +497,7 @@ let
     ''
       ${lib.optionalString (modeAsk || pathAccessAsk) (mkGrantsHelper {
         grantNamespace = "protectedPaths";
+        inherit promptTimeout;
       })}
 
       var path = require("path")
@@ -672,7 +676,10 @@ let
     '';
 
   mkGrantsHelper =
-    { grantNamespace }:
+    {
+      grantNamespace,
+      promptTimeout ? 25,
+    }:
     let
       grantsFile = "agent/extensions/grants.json";
     in
@@ -729,13 +736,16 @@ let
       loadGrants()
 
       var _promptQueue: Promise<any> = Promise.resolve()
-      var PROMPT_TIMEOUT_MS = 25000
+      var PROMPT_TIMEOUT_MS = ${toString (promptTimeout * 1000)}
 
       // queuedPrompt runs task once it reaches the front of the queue, so only
       // one ctx.ui.select shows at a time. It resolves with whatever task passes
-      // to finish, or null when no answer arrives before deadlineMs (kept well
-      // under the runtime 30s tool_call handler cap) — so the handler never times
-      // out and a failed or unanswered prompt never leaves the queue rejected.
+      // to finish, or null when no answer arrives before deadlineMs — so a failed
+      // or unanswered prompt never leaves the queue rejected. omp pauses its
+      // tool_call handler budget (extensionHandlers.toolCallTimeoutMs, 30s) while
+      // a ctx.ui dialog is open, so deadlineMs alone bounds an on-screen prompt;
+      // a prompt still WAITING in the queue has no dialog open and stays under
+      // that budget, and omp blocks the call when it runs out.
       //
       // While a prompt is on screen it reports +1/-1 to an optional process-wide
       // hook, globalThis[Symbol.for("omp.operatorWait")]. Extensions each get
