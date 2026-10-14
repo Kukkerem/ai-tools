@@ -40,7 +40,6 @@ let
 
   sharedAgentPackages = [
     llmAgents.agent-browser
-    llmAgents.claude-plugins
     pkgs.coreutils
     pkgs.jq
   ];
