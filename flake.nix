@@ -40,17 +40,17 @@
     };
 
     caveman = {
-      url = "github:JuliusBrussee/caveman/766dce6b1394ebb56a3090748d5a0240a5aefb36";
+      url = "github:JuliusBrussee/caveman/d262ab3882952a59312ff3537cd86d894523c5ab";
       flake = false;
     };
 
     superpowers = {
-      url = "github:obra/superpowers/b36e0829c6d0140e93cfef2ca599b1b07d4a7797";
+      url = "github:obra/superpowers/bb92a77741419a4ab5f06e711a283343f1ada0c3";
       flake = false;
     };
 
     mattpocock-skills = {
-      url = "github:mattpocock/skills/068b6e0c62393147daf03530149cdce209c93da8";
+      url = "github:mattpocock/skills/49dd158d1076134a641b33efb035946536778336";
       flake = false;
     };
 
