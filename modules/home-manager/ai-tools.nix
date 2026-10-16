@@ -705,7 +705,9 @@ let
         if baseProfile.servicePort != null || name == "default" then
           baseProfile.servicePort
         else
-          opencodeDefaultServicePort + 1 + lib.lists.findFirstIndex (n: n == name) 0 extraOpencodeProfileNames;
+          opencodeDefaultServicePort
+          + 1
+          + lib.lists.findFirstIndex (n: n == name) 0 extraOpencodeProfileNames;
       mcp =
         baseProfileMcp
         // optionalAttrs (baseProfileMcp.memoryDir == null) {
@@ -2652,7 +2654,9 @@ in
       home.packages = packageSets.opencodeHelperPackages ++ extraOpencodePackages;
       home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles;
       home.activation = lib.optionalAttrs (opencodeServiceProfiles != { }) {
-        aiToolsOpencodeServicePorts = lib.hm.dag.entryAfter [ "linkGeneration" ] opencodeServicePortActivation;
+        aiToolsOpencodeServicePorts = lib.hm.dag.entryAfter [
+          "linkGeneration"
+        ] opencodeServicePortActivation;
       };
       assertions = [
         {
