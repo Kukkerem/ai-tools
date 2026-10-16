@@ -36,7 +36,7 @@ Full, buildable reference configurations live in [`examples/`](./examples): [`ho
 |-------|------------|---------|----------|
 | Claude Code | `tools.claudeCode` | `claude` | Agents, commands, skills, MCP, memory |
 | Codex | `tools.codex` | `codex` | Prompts, skills, MCP, memories |
-| OpenCode | `tools.opencode` | `opencode` | Profiles, LSP, DCP, RTK, MCP, agents/commands/skills |
+| OpenCode (V2) | `tools.opencode` | `opencode` | Profiles, per-profile services, DCP, RTK, MCP, agents/commands/skills |
 | omp (oh-my-pi) | `tools.omp` | `omp` | Profiles, hooks, extensions, MCP, agents/commands/skills |
 
 All four share the same agents, commands, and skills from `ai-tools/`. Each tool gets config files generated under its own directory (`~/.claude/`, `~/.codex/`, `~/.config/opencode/`, `~/.omp/`).
@@ -149,17 +149,17 @@ programs.ai-tools.mcp.servers.openrouter-search = {
 
 ## OpenCode Profiles
 
-Multi-profile support for isolated OpenCode configs:
+Targets OpenCode V2 (`opencode2` from llm-agents.nix, installed as `opencode`). Config is generated in the native V2 shape (`permissions` rules, `policies`, `mcp.servers`, `plugins`, `agents`). Multi-profile support for isolated OpenCode configs:
 
 ```nix
 programs.ai-tools.tools.opencode = {
   enable = true;
   theme = "catppuccin";
 
-  lsp = {
-    nixd.enable = true;
-    pyright.enable = true;
-  };
+  # Appended after the defaults (shell/edit/external_directory ask, webfetch allow); last match wins.
+  permissions = [
+    { action = "shell"; resource = "git status *"; effect = "allow"; }
+  ];
 
   dcp = {
     enable = true;
@@ -181,7 +181,13 @@ programs.ai-tools.tools.opencode = {
 };
 ```
 
-Each profile gets: isolated config dir, wrapper script, per-profile MCP config, DCP/RTK settings, and optional `dataDir`/`stateDir` isolation.
+Each profile gets: isolated config dir, wrapper script, per-profile MCP config, DCP/RTK settings, and optional `dataDir` isolation.
+
+OpenCode V2 runs one background service per state directory, so every extra profile also gets its own `stateDir` (default `.local/state/opencode-<profile>`) and service port (`servicePort`, default 49375 + index of the profile name in sorted order; the default profile keeps 49374). Activation writes the port with `opencode service set port`; ports must be distinct.
+
+Terminal-client settings (V2 `cli.json`) come from `theme` plus `cliSettings` and are passed inline by each wrapper through `OPENCODE_CLI_CONFIG_CONTENT`, so `~/.config/opencode/cli.json` stays user-editable but Nix-set keys win.
+
+V2 does not run language servers, so there are no LSP options. V1-only auth plugins (`opencode-*-auth`) are no longer added; DCP 3.x and the RTK plugin support V2.
 
 ## omp (oh-my-pi)
 
@@ -294,31 +300,6 @@ programs.ai-tools.tools.omp = {
 Default guardrail lists are defined in [`lib/omp.nix`](./lib/omp.nix): `defaultPermissionGateBlockedPatterns` / `defaultPermissionGateBlockedCommands`, `defaultProtectedPathGlobs`, and `defaultPathAccessAllowPaths` / `defaultPathAccessDenyPaths`.
 
 **Note:** omp's `agent.db` (OAuth tokens set via `/login`) is not Nix-managed. Run `/login` once per profile after initial setup.
-
-## LSP Support (OpenCode)
-
-Bash, Python, Nix, Terraform, Go, YAML, JSON language servers — all configured from Nix packages:
-
-```nix
-programs.ai-tools.tools.opencode.lsp = {
-  bashls.enable = true;
-  pyright.enable = true;
-  nixd.enable = true;
-  terraformls.enable = false;
-  gopls.enable = true;
-  yamlls.enable = true;
-  jsonls.enable = true;
-};
-```
-
-Wire `nixd` to your NixOS config for option completions:
-
-```nix
-programs.ai-tools.nixos = {
-  flakePath = "/home/user/nix-config";
-  configurationName = "workstation";
-};
-```
 
 ## Dev Shell Integration
 

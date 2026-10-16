@@ -53,10 +53,10 @@ pkgs.runCommand "ai-tools-nixos-module-tests" { nativeBuildInputs = [ pkgs.jq ];
   test -f "$work_config"
   test -x "$work_wrapper"
 
-  jq -e '.theme == "catppuccin"' "$default_config" >/dev/null
-  jq -e '.mcp.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/default-opencode/memory.json"' "$default_config" >/dev/null
-  jq -e '.mcp.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/opencode-work/memory.json"' "$work_config" >/dev/null
-  grep -F 'export OPENCODE_CONFIG="$HOME/.config/opencode-work/opencode.jsonc"' "$work_wrapper" >/dev/null
+  jq -e '.mcp.servers.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/default-opencode/memory.json"' "$default_config" >/dev/null
+  jq -e '.mcp.servers.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/opencode-work/memory.json"' "$work_config" >/dev/null
+  grep -F 'export OPENCODE_CONFIG_DIR="$HOME/.config/opencode-work"' "$work_wrapper" >/dev/null
+  grep -F 'export XDG_STATE_HOME="$HOME/.local/state/opencode-work"' "$work_wrapper" >/dev/null
 
   touch $out
 ''

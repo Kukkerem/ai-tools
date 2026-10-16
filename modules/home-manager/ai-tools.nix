@@ -102,6 +102,28 @@ let
     };
   };
 
+  opencodePermissionRuleType = types.submodule {
+    options = {
+      action = mkOption {
+        type = types.str;
+        description = "Permission action, e.g. `shell`, `edit`, `read`, `webfetch`, or `<server>_<tool>`. Wildcards allowed.";
+      };
+      resource = mkOption {
+        type = types.str;
+        default = "*";
+        description = "Resource matched by the action (path, command, URL, agent ID, ...). Wildcards allowed.";
+      };
+      effect = mkOption {
+        type = types.enum [
+          "allow"
+          "ask"
+          "deny"
+        ];
+        description = "Decision for matching requests.";
+      };
+    };
+  };
+
   mkMcpServerEnable =
     profileMcp: serverName:
     let
@@ -469,48 +491,22 @@ let
       lib.nameValuePair ".agents/skills/${name}/agents/openai.yaml" { text = skill.openaiYaml; }
     ) (filterAgents aiTools.codex.agentSkills);
 
-  nixdInitialization = {
-    formatting.command = [ (lib.getExe pkgs.nixfmt) ];
-  }
-  // lib.optionalAttrs (cfg.nixos.flakePath != null && cfg.nixos.configurationName != null) {
-    options.nixos.expr = ''(builtins.getFlake "${cfg.nixos.flakePath}").nixosConfigurations.${cfg.nixos.configurationName}.options'';
-  };
+  opencodePackage = packageSets.toolPackages.opencode;
 
-  opencodeAuthPlugins = [
-    "opencode-antigravity-auth@latest"
-    "opencode-claude-auth@latest"
-    "opencode-openai-codex-auth@latest"
-  ];
-
+  # V1 auth plugins (antigravity, claude, openai-codex) have no V2 releases and
+  # V1 plugin code does not load in V2, so only user and DCP plugins remain.
   mkOpencodePlugins =
     profile:
-    opencodeAuthPlugins
-    ++ profile.plugins
-    ++ optional (profile.dcp.enable && profile.dcp.plugin != null) profile.dcp.plugin;
-
-  mkOpencodeDefaultSettings =
-    profile:
-    opencodeSupport.defaultSettings {
-      inherit nixdInitialization;
-      plugins = mkOpencodePlugins profile;
-      permission = profile.permission;
-      theme = profile.theme;
-      smallModel = profile.smallModel;
-      disabledProviders = profile.disabledProviders;
-      lspBashls = profile.lsp.bashls.enable;
-      lspPyright = profile.lsp.pyright.enable;
-      lspNixd = profile.lsp.nixd.enable;
-      lspTerraformls = profile.lsp.terraformls.enable;
-      lspGopls = profile.lsp.gopls.enable;
-      lspYamlls = profile.lsp.yamlls.enable;
-      lspJsonls = profile.lsp.jsonls.enable;
-    };
+    profile.plugins ++ optional (profile.dcp.enable && profile.dcp.plugin != null) profile.dcp.plugin;
 
   mkOpencodeGeneratedSettings =
     profile:
-    mkOpencodeDefaultSettings profile
+    opencodeSupport.defaultSettings {
+      plugins = mkOpencodePlugins profile;
+      inherit (profile) permissions smallModel disabledProviders;
+    }
     // optionalAttrs profile.mcp.enable {
-      mcp = mkOpencodeMcpServers profile.mcp;
+      mcp.servers = mkOpencodeMcpServers profile.mcp;
     }
     // optionalAttrs (profile.model != null) {
       model = profile.model;
@@ -524,6 +520,29 @@ let
     profile:
     lib.recursiveUpdate (lib.recursiveUpdate opencodeSupport.dcpConfig profile.dcp.settings) profile.dcp.extraSettings;
 
+  usesGlobalOpencodeDir = profile: profile.configDir == ".config/opencode";
+
+  # Home Manager's `programs.opencode` owns `opencode.json` in the global
+  # config dir; other profile dirs get a module-written `opencode.jsonc`.
+  opencodeConfigFileName =
+    profile: if usesGlobalOpencodeDir profile then "opencode.json" else "opencode.jsonc";
+
+  # Terminal-client settings (V2 `cli.json`). Passed inline so each profile
+  # keeps its own theme while `~/.config/opencode/cli.json` stays user-editable.
+  mkOpencodeCliSettings =
+    profile: lib.recursiveUpdate { theme.name = profile.theme; } profile.cliSettings;
+
+  # rtk judges rewrites against OpenCode's permission rules, but only reads the
+  # global config dir or `OPENCODE_CONFIG`. Exporting `OPENCODE_CONFIG` to
+  # OpenCode itself would load the profile config twice under V2, so point
+  # only rtk at the profile config.
+  mkOpencodeProfileRtk =
+    profile:
+    pkgs.writeShellScriptBin "rtk" ''
+      export OPENCODE_CONFIG="$HOME/${profile.configDir}/${opencodeConfigFileName profile}"
+      exec ${lib.getExe opencodeSupport.rtkPackage} "$@"
+    '';
+
   mkOpencodeWrapper =
     profile: runMode:
     let
@@ -531,10 +550,13 @@ let
     in
     pkgs.writeShellApplication {
       name = commandName;
-      runtimeInputs = [ llmAgents.opencode ] ++ profile.extraRuntimePackages;
+      runtimeInputs =
+        optional (profile.rtk.enable && !usesGlobalOpencodeDir profile) (mkOpencodeProfileRtk profile)
+        ++ [ opencodePackage ]
+        ++ profile.extraRuntimePackages;
       text = ''
-        export OPENCODE_CONFIG="$HOME/${profile.configDir}/opencode.jsonc"
         export OPENCODE_CONFIG_DIR="$HOME/${profile.configDir}"
+        export OPENCODE_CLI_CONFIG_CONTENT=${lib.escapeShellArg (builtins.toJSON (mkOpencodeCliSettings profile))}
       ''
       + optionalString (profile.dataDir != null) ''
         export XDG_DATA_HOME="$HOME/${profile.dataDir}"
@@ -543,7 +565,7 @@ let
         export XDG_STATE_HOME="$HOME/${profile.stateDir}"
       ''
       + ''
-        exec ${lib.getExe llmAgents.opencode} ${optionalString runMode "run "}"$@"
+        exec ${lib.getExe opencodePackage} ${optionalString runMode "run "}"$@"
       '';
     };
 
@@ -595,7 +617,7 @@ let
         );
       };
       rtkFiles = optionalAttrs profile.rtk.enable {
-        "${profile.configDir}/plugins/rtk.ts".text = opencodeSupport.rtkPlugin;
+        "${profile.configDir}/plugins/rtk.ts".source = opencodeSupport.rtkPluginSource;
         "${profile.configDir}/rtk/config.toml".text = opencodeSupport.mkRtkConfig {
           excludeCommands = profile.rtk.excludeCommands;
           teeEnable = profile.rtk.tee.enable;
@@ -616,16 +638,17 @@ let
     configDir = ".config/opencode";
     dataDir = null;
     stateDir = null;
+    servicePort = null;
     inherit (cfg.tools.opencode)
       settings
       extraSettings
       plugins
-      permission
+      permissions
       model
       theme
+      cliSettings
       smallModel
       disabledProviders
-      lsp
       dcp
       rtk
       ;
@@ -671,6 +694,18 @@ let
           legacyOpencodeProfile.configDir
         else
           ".config/opencode-${name}";
+      # V2 runs one background service per state dir; extra profiles need
+      # their own so they start their own service with their own config.
+      stateDir =
+        if baseProfile.stateDir != null || name == "default" then
+          baseProfile.stateDir
+        else
+          ".local/state/opencode-${name}";
+      servicePort =
+        if baseProfile.servicePort != null || name == "default" then
+          baseProfile.servicePort
+        else
+          opencodeDefaultServicePort + 1 + lib.lists.findFirstIndex (n: n == name) 0 extraOpencodeProfileNames;
       mcp =
         baseProfileMcp
         // optionalAttrs (baseProfileMcp.memoryDir == null) {
@@ -694,11 +729,45 @@ let
     files // mkOpencodeProfileFiles name profile
   ) { } extraOpencodeProfiles;
 
-  defaultOpencodeCustomFiles =
-    optionalAttrs defaultOpencodeEnabled (mkOpencodeProfileConfigFile "default" defaultOpencodeProfile)
-    // optionalAttrs (
-      defaultOpencodeEnabled && defaultOpencodeProfile.configDir != ".config/opencode"
-    ) (mkOpencodeProfileFiles "default" defaultOpencodeProfile);
+  # In the global config dir Home Manager's `programs.opencode` writes the
+  # settings, agents, commands, and skills; elsewhere the module writes them.
+  defaultOpencodeCustomFiles = optionalAttrs (
+    defaultOpencodeEnabled && !usesGlobalOpencodeDir defaultOpencodeProfile
+  ) (mkOpencodeProfileFiles "default" defaultOpencodeProfile);
+
+  # OpenCode V2's built-in background service port.
+  opencodeDefaultServicePort = 49374;
+  extraOpencodeProfileNames = lib.sort lib.lessThan (attrNames cfg.tools.opencode.profiles);
+
+  # Profiles with a managed service port; extra profiles always get one so
+  # their dedicated service does not collide with the default 49374.
+  opencodeServiceProfiles = lib.filterAttrs (
+    _: profile: profile.servicePort != null
+  ) enabledOpencodeProfiles;
+
+  opencodeServicePorts = lib.mapAttrsToList (
+    _: profile: if profile.servicePort != null then profile.servicePort else opencodeDefaultServicePort
+  ) enabledOpencodeProfiles;
+
+  duplicateOpencodeServicePorts = lib.unique (
+    lib.filter (port: lib.count (p: p == port) opencodeServicePorts > 1) opencodeServicePorts
+  );
+
+  # The service registration (`service.json` in the config dir) also holds the
+  # password OpenCode generates, so it stays mutable: only the port is set,
+  # through the CLI, and only when it differs (setting it stops the service).
+  opencodeServicePortActivation = lib.concatStrings (
+    lib.mapAttrsToList (_: profile: ''
+      (
+        export OPENCODE_CONFIG_DIR="$HOME/${profile.configDir}"
+        ${optionalString (profile.stateDir != null) ''export XDG_STATE_HOME="$HOME/${profile.stateDir}"''}
+        ${optionalString (profile.dataDir != null) ''export XDG_DATA_HOME="$HOME/${profile.dataDir}"''}
+        if [ "$(${lib.getExe opencodePackage} service get port 2>/dev/null || true)" != "${toString profile.servicePort}" ]; then
+          run ${lib.getExe opencodePackage} service set port ${toString profile.servicePort}
+        fi
+      )
+    '') opencodeServiceProfiles
+  );
 
   extraOpencodePackages =
     lib.mapAttrsToList (_: profile: mkOpencodeWrapper profile false) (
@@ -736,7 +805,7 @@ let
     if defaultOpencodeProfile.commandName != null then
       mkOpencodeWrapper defaultOpencodeProfile false
     else
-      llmAgents.opencode;
+      opencodePackage;
 
   opencodeSettings = mkOpencodeSettings defaultOpencodeProfile;
 
@@ -1095,20 +1164,6 @@ in
       description = "Profile name used for local AI setup state such as memory files.";
     };
 
-    nixos = {
-      flakePath = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Optional flake path used to expose NixOS options to nixd inside opencode.";
-      };
-
-      configurationName = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Optional NixOS configuration name used with `nixos.flakePath`.";
-      };
-    };
-
     tools = {
       claudeCode = {
         enable = mkEnableOption "Claude Code" // {
@@ -1223,7 +1278,7 @@ in
         plugins = mkOption {
           type = types.listOf types.str;
           default = [ ];
-          description = "Additional OpenCode plugin package names or local plugin references. Authentication plugins are always included by this module.";
+          description = "Additional OpenCode V2 plugin package names or local plugin references. V1-only plugins do not load in V2.";
         };
 
         program = mkProgramOption "programs.opencode";
@@ -1234,10 +1289,21 @@ in
           profiles can override this with `tools.opencode.profiles.<name>.mcp.inheritGlobal`.
         '';
 
-        permission = mkOption {
-          type = types.attrsOf types.anything;
-          default = { };
-          description = "OpenCode permission values merged over the module defaults.";
+        permissions = mkOption {
+          type = types.listOf opencodePermissionRuleType;
+          default = [ ];
+          description = ''
+            OpenCode V2 permission rules appended after the module defaults
+            (`shell`/`edit`/`external_directory` ask, `webfetch` allow). The
+            last matching rule wins.
+          '';
+          example = [
+            {
+              action = "shell";
+              resource = "git status *";
+              effect = "allow";
+            }
+          ];
         };
 
         model = mkOption {
@@ -1254,43 +1320,29 @@ in
         theme = mkOption {
           type = types.str;
           default = "catppuccin";
-          description = "OpenCode UI theme name (e.g. \"catppuccin\", \"dark\", \"light\").";
+          description = "OpenCode UI theme name (e.g. \"catppuccin\", \"nightowl\", \"system\").";
+        };
+
+        cliSettings = mkOption {
+          type = types.attrsOf types.anything;
+          default = { };
+          description = ''
+            OpenCode V2 terminal-client settings (`cli.json` shape) merged over
+            `{ theme.name = theme; }`. The wrapper passes them inline through
+            `OPENCODE_CLI_CONFIG_CONTENT`, so they override `~/.config/opencode/cli.json`.
+          '';
         };
 
         smallModel = mkOption {
           type = types.str;
           default = "openrouter/openai/gpt-5-nano";
-          description = "OpenCode small/cheap model used for background tasks.";
+          description = "Model for OpenCode's built-in `title` agent (V1 `small_model`).";
         };
 
         disabledProviders = mkOption {
           type = types.listOf types.str;
           default = [ "github-copilot" ];
-          description = "List of provider IDs disabled in OpenCode.";
-        };
-
-        lsp = {
-          bashls.enable = mkEnableOption "bash-language-server LSP" // {
-            default = true;
-          };
-          pyright.enable = mkEnableOption "pyright Python LSP" // {
-            default = true;
-          };
-          nixd.enable = mkEnableOption "nixd Nix LSP" // {
-            default = true;
-          };
-          terraformls.enable = mkEnableOption "terraform-ls Terraform LSP" // {
-            default = true;
-          };
-          gopls.enable = mkEnableOption "gopls Go LSP" // {
-            default = true;
-          };
-          yamlls.enable = mkEnableOption "yaml-language-server YAML LSP" // {
-            default = true;
-          };
-          jsonls.enable = mkEnableOption "vscode-json-language-server JSON LSP" // {
-            default = true;
-          };
+          description = "Provider IDs denied through `provider.use` policies.";
         };
 
         dcp.enable = mkEnableOption "OpenCode Dynamic Context Pruning support" // {
@@ -1402,7 +1454,22 @@ in
                   stateDir = mkOption {
                     type = types.nullOr types.str;
                     default = null;
-                    description = "Optional home-relative XDG_STATE_HOME exported by this profile wrapper.";
+                    description = ''
+                      Home-relative XDG_STATE_HOME exported by this profile wrapper.
+                      OpenCode V2 runs one background service per state directory, so
+                      additional profiles default to `.local/state/opencode-<profile>`.
+                    '';
+                  };
+
+                  servicePort = mkOption {
+                    type = types.nullOr types.port;
+                    default = null;
+                    description = ''
+                      Port of this profile's OpenCode V2 background service, written to
+                      `<configDir>/service.json` during activation. Additional profiles
+                      default to 49375 + their index among profile names sorted
+                      alphabetically; null keeps OpenCode's default (49374).
+                    '';
                   };
 
                   settings = mkOption {
@@ -1440,10 +1507,10 @@ in
                     description = "Extra packages added to this profile wrapper runtime PATH.";
                   };
 
-                  permission = mkOption {
-                    type = types.attrsOf types.anything;
-                    default = { };
-                    description = "OpenCode permission values merged over the module defaults for this profile.";
+                  permissions = mkOption {
+                    type = types.listOf opencodePermissionRuleType;
+                    default = [ ];
+                    description = "OpenCode V2 permission rules appended after the module defaults for this profile.";
                   };
 
                   model = mkOption {
@@ -1458,40 +1525,22 @@ in
                     description = "OpenCode UI theme for this profile.";
                   };
 
+                  cliSettings = mkOption {
+                    type = types.attrsOf types.anything;
+                    default = { };
+                    description = "OpenCode V2 terminal-client settings merged over `{ theme.name = theme; }` for this profile.";
+                  };
+
                   smallModel = mkOption {
                     type = types.str;
                     default = "openrouter/openai/gpt-5-nano";
-                    description = "OpenCode small/cheap model for this profile.";
+                    description = "Model for the built-in `title` agent in this profile.";
                   };
 
                   disabledProviders = mkOption {
                     type = types.listOf types.str;
                     default = [ "github-copilot" ];
-                    description = "Provider IDs disabled in this OpenCode profile.";
-                  };
-
-                  lsp = {
-                    bashls.enable = mkEnableOption "bash-language-server LSP" // {
-                      default = true;
-                    };
-                    pyright.enable = mkEnableOption "pyright Python LSP" // {
-                      default = true;
-                    };
-                    nixd.enable = mkEnableOption "nixd Nix LSP" // {
-                      default = true;
-                    };
-                    terraformls.enable = mkEnableOption "terraform-ls Terraform LSP" // {
-                      default = true;
-                    };
-                    gopls.enable = mkEnableOption "gopls Go LSP" // {
-                      default = true;
-                    };
-                    yamlls.enable = mkEnableOption "yaml-language-server YAML LSP" // {
-                      default = true;
-                    };
-                    jsonls.enable = mkEnableOption "vscode-json-language-server JSON LSP" // {
-                      default = true;
-                    };
+                    description = "Provider IDs denied through `provider.use` policies in this profile.";
                   };
 
                   dcp = {
@@ -2602,6 +2651,17 @@ in
     (mkIf cfg.tools.opencode.enable {
       home.packages = packageSets.opencodeHelperPackages ++ extraOpencodePackages;
       home.file = extraOpencodeHomeFiles // defaultOpencodeCustomFiles;
+      home.activation = lib.optionalAttrs (opencodeServiceProfiles != { }) {
+        aiToolsOpencodeServicePorts = lib.hm.dag.entryAfter [ "linkGeneration" ] opencodeServicePortActivation;
+      };
+      assertions = [
+        {
+          assertion = duplicateOpencodeServicePorts == [ ];
+          message = "programs.ai-tools.tools.opencode profiles share background service ports (${
+            lib.concatMapStringsSep ", " toString duplicateOpencodeServicePorts
+          }); set distinct `profiles.<name>.servicePort` values.";
+        }
+      ];
     })
 
     (mkIf (cfg.tools.opencode.enable && defaultOpencodeEnabled) {
@@ -2646,7 +2706,7 @@ in
       )
       {
         home.file = {
-          ".config/opencode/plugins/rtk.ts".text = opencodeSupport.rtkPlugin;
+          ".config/opencode/plugins/rtk.ts".source = opencodeSupport.rtkPluginSource;
           ".config/rtk/config.toml".text = opencodeSupport.mkRtkConfig {
             excludeCommands = defaultOpencodeProfile.rtk.excludeCommands;
             teeEnable = defaultOpencodeProfile.rtk.tee.enable;

@@ -39,103 +39,51 @@ let
   ];
 in
 {
+  # Native OpenCode V2 `opencode.jsonc` defaults. Permission rules are ordered
+  # and the last matching rule wins, so caller `permissions` override defaults.
   defaultSettings =
     {
-      nixdInitialization,
-      permission ? { },
+      permissions ? [ ],
       plugins ? [ ],
-      theme ? "catppuccin",
       smallModel ? "openrouter/openai/gpt-5-nano",
       disabledProviders ? [ "github-copilot" ],
-      # Per-LSP enable toggles. Each defaults to true.
-      lspBashls ? true,
-      lspPyright ? true,
-      lspNixd ? true,
-      lspTerraformls ? true,
-      lspGopls ? true,
-      lspYamlls ? true,
-      lspJsonls ? true,
     }:
-    let
-      allLsp = {
-        bashls = lib.optionalAttrs lspBashls {
-          command = [
-            (lib.getExe pkgs.bash-language-server)
-            "start"
-          ];
-          extensions = [
-            ".sh"
-            ".bash"
-          ];
-        };
-        pyright = lib.optionalAttrs lspPyright {
-          command = [ (lib.getExe pkgs.pyright) ];
-          extensions = [
-            ".py"
-            ".pyi"
-          ];
-        };
-        nixd = lib.optionalAttrs lspNixd {
-          command = [ (lib.getExe pkgs.nixd) ];
-          extensions = [ ".nix" ];
-          initialization = nixdInitialization;
-        };
-        terraformls = lib.optionalAttrs lspTerraformls {
-          command = [
-            (lib.getExe pkgs.terraform-ls)
-            "serve"
-          ];
-          extensions = [
-            ".tf"
-            ".tfvars"
-          ];
-        };
-        gopls = lib.optionalAttrs lspGopls {
-          command = [ (lib.getExe pkgs.gopls) ];
-          extensions = [
-            ".go"
-            ".mod"
-            ".sum"
-          ];
-        };
-        yamlls = lib.optionalAttrs lspYamlls {
-          command = [
-            (lib.getExe pkgs.yaml-language-server)
-            "--stdio"
-          ];
-          extensions = [
-            ".yaml"
-            ".yml"
-          ];
-        };
-        jsonls = lib.optionalAttrs lspJsonls {
-          command = [
-            (lib.getExe' pkgs.vscode-langservers-extracted "vscode-json-language-server")
-            "--stdio"
-          ];
-          extensions = [
-            ".json"
-            ".jsonc"
-          ];
-        };
-      };
-      # Remove LSP entries whose value is {} (disabled via optionalAttrs false)
-      enabledLsp = lib.filterAttrs (_: v: v != { }) allLsp;
-    in
     {
-      plugin = plugins;
-      inherit theme;
+      "$schema" = "https://opencode.ai/config.json";
+      inherit plugins;
       share = "manual";
-      autoshare = false;
-      autoupdate = true;
-      disabled_providers = disabledProviders;
-      small_model = smallModel;
-      permission = {
-        bash = "ask";
-        edit = "ask";
-        webfetch = "allow";
-      }
-      // permission;
+      update = "auto";
+      permissions = [
+        {
+          action = "shell";
+          resource = "*";
+          effect = "ask";
+        }
+        {
+          action = "edit";
+          resource = "*";
+          effect = "ask";
+        }
+        {
+          action = "webfetch";
+          resource = "*";
+          effect = "allow";
+        }
+        # V2 allows paths outside the project by default; V1 asked.
+        {
+          action = "external_directory";
+          resource = "*";
+          effect = "ask";
+        }
+      ]
+      ++ permissions;
+      policies = map (provider: {
+        action = "provider.use";
+        resource = provider;
+        effect = "deny";
+      }) disabledProviders;
+      # V2 replaces `small_model` with the built-in `title` agent's model.
+      agents.title.model = smallModel;
       formatter.nixfmt = {
         command = [
           (lib.getExe pkgs.nixfmt)
@@ -143,7 +91,6 @@ in
         ];
         extensions = [ ".nix" ];
       };
-      lsp = enabledLsp;
     };
 
   dcpConfig = {
@@ -190,38 +137,8 @@ in
     '';
   };
 
-  rtkPlugin = ''
-    import type { Plugin } from "@opencode-ai/plugin"
-
-    export const RtkOpenCodePlugin: Plugin = async ({ $ }) => {
-      try {
-        await $`which rtk`.quiet()
-      } catch {
-        console.warn("[rtk] rtk binary not found in PATH - plugin disabled")
-        return {}
-      }
-
-      return {
-        "tool.execute.before": async (input, output) => {
-          const tool = String(input?.tool ?? "").toLowerCase()
-          if (tool !== "bash" && tool !== "shell") return
-          const args = output?.args
-          if (!args || typeof args !== "object") return
-
-          const command = (args as Record<string, unknown>).command
-          if (typeof command !== "string" || !command) return
-
-          try {
-            const result = await $`rtk rewrite ''${command}`.quiet().nothrow()
-            const rewritten = String(result.stdout).trim()
-            if (rewritten && rewritten !== command) {
-              ;(args as Record<string, unknown>).command = rewritten
-            }
-          } catch {
-            // rtk rewrite failed - pass through unchanged
-          }
-        },
-      }
-    }
-  '';
+  # Upstream OpenCode plugin shipped with rtk. Its default export carries both
+  # the V2 `setup` entrypoint and the V1 `server` one; rewrite and permission
+  # logic lives in `rtk hook opencode`, so the plugin must match the rtk binary.
+  rtkPluginSource = "${llmAgents.rtk.src}/hooks/opencode/rtk.ts";
 }

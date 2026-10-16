@@ -65,17 +65,6 @@ let
 
   opencodeHelperPackages = [ ];
 
-  opencodeRuntimePackages = [
-    pkgs.bash-language-server
-    pkgs.nixfmt
-    pkgs.pyright
-    pkgs.terraform-ls
-    pkgs.vscode-langservers-extracted
-    pkgs.yaml-language-server
-  ]
-  ++ serenaSupportPackages
-  ++ serenaRustPackages;
-
   mcpRuntimePackages = [
     mcpSupport.basicMemoryPackage
     mcpSupport.mcpServerFetchFixed
@@ -94,10 +83,24 @@ let
   ]
   ++ browserPackages;
 
+  # OpenCode V2 ships as `opencode2` in llm-agents.nix; expose it under the
+  # `opencode` command name as well.
+  opencode = pkgs.symlinkJoin {
+    name = "opencode-${llmAgents.opencode2.version}";
+    inherit (llmAgents.opencode2) version;
+    paths = [ llmAgents.opencode2 ];
+    postBuild = ''
+      ln -s opencode2 "$out/bin/opencode"
+    '';
+    meta = llmAgents.opencode2.meta // {
+      mainProgram = "opencode";
+    };
+  };
+
   toolPackages = {
     claudeCode = llmAgents.claude-code;
     codex = llmAgents.codex;
-    opencode = llmAgents.opencode;
+    inherit opencode;
     omp = llmAgents.omp;
   };
 
@@ -108,7 +111,6 @@ let
     ++ claudeCodeHelperPackages
     ++ codexHelperPackages
     ++ opencodeHelperPackages
-    ++ opencodeRuntimePackages
     ++ mcpRuntimePackages
     ++ [
       toolPackages.claudeCode
@@ -127,7 +129,6 @@ in
     defaultPackages
     mcpRuntimePackages
     opencodeHelperPackages
-    opencodeRuntimePackages
     serenaRustPackages
     serenaSupportPackages
     sharedAgentPackages

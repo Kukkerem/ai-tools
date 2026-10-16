@@ -60,20 +60,11 @@ programs.ai-tools.tools.opencode.model = "anthropic/claude-opus-4-5";
 programs.ai-tools.tools.claudeCode.model = "claude-opus-4-5";
 ```
 
-### Disable LSPs you don't need
-
-```nix
-programs.ai-tools.tools.opencode.lsp = {
-  terraformls.enable = false;
-  gopls.enable = false;
-};
-```
-
 ### Tune OpenCode defaults
 
 ```nix
 programs.ai-tools.tools.opencode = {
-  theme = "dark";
+  theme = "system";
   smallModel = "openrouter/google/gemini-flash-1.5";
   disabledProviders = []; # allow all providers
 };

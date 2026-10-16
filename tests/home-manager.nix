@@ -294,29 +294,44 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -x "$work_wrapper"
     test -x "$work_run_wrapper"
 
-    jq -e '.theme == "catppuccin"' "$default_config" >/dev/null
-    jq -e '.mcp.context7.enabled == true' "$default_config" >/dev/null
-    jq -e '.mcp.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/default-opencode/memory.json"' "$default_config" >/dev/null
+    jq -e '.theme == null and .lsp == null and .permission == null and .plugin == null' "$default_config" >/dev/null
+    jq -e '.mcp.servers.context7.type == "local" and .mcp.servers.context7.disabled == null' "$default_config" >/dev/null
+    jq -e '.mcp.servers.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/default-opencode/memory.json"' "$default_config" >/dev/null
+    jq -e '.policies == [{"action": "provider.use", "resource": "github-copilot", "effect": "deny"}]' "$default_config" >/dev/null
+    jq -e '.agents.title.model == "openrouter/openai/gpt-5-nano"' "$default_config" >/dev/null
+    jq -e '.permissions[-1] == {"action": "external_directory", "resource": "*", "effect": "ask"}' "$default_config" >/dev/null
+    jq -e '.plugins == ["@tarquinen/opencode-dcp@latest"]' "$default_config" >/dev/null
+    test ! -e ${generation}/home-files/.config/opencode/opencode.jsonc
 
-    jq -e '.theme == "nightowl"' "$work_config" >/dev/null
-    jq -e '.mcp.context7 == null' "$work_config" >/dev/null
-    jq -e '.mcp."cloudflare-docs".url == "https://docs.mcp.cloudflare.com/mcp"' "$work_config" >/dev/null
-    jq -e '.mcp."openrouter-search".environment.OPENROUTER_API_KEY_FILE == "/run/secrets/openrouter-work-api-key"' "$work_config" >/dev/null
-    jq -e '.mcp.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/opencode-work/memory.json"' "$work_config" >/dev/null
+    jq -e '.mcp.servers.context7 == null' "$work_config" >/dev/null
+    jq -e '.mcp.servers."cloudflare-docs" == {"type": "remote", "url": "https://docs.mcp.cloudflare.com/mcp"}' "$work_config" >/dev/null
+    jq -e '.mcp.servers."openrouter-search".environment.OPENROUTER_API_KEY_FILE == "/run/secrets/openrouter-work-api-key"' "$work_config" >/dev/null
+    jq -e '.mcp.servers.memory.environment.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/opencode-work/memory.json"' "$work_config" >/dev/null
 
-    jq -e '.mcp.git.enabled == true' "$isolated_config" >/dev/null
-    jq -e '.mcp.context7 == null' "$isolated_config" >/dev/null
-    jq -e '.mcp.memory == null' "$isolated_config" >/dev/null
+    jq -e '.mcp.servers.git.type == "local"' "$isolated_config" >/dev/null
+    jq -e '.mcp.servers.context7 == null' "$isolated_config" >/dev/null
+    jq -e '.mcp.servers.memory == null' "$isolated_config" >/dev/null
 
     jq -e '.enabled == true' "$work_plugin_config" >/dev/null
     jq -e '.nested.option == "value"' "$work_plugin_config" >/dev/null
 
-    grep -F 'export OPENCODE_CONFIG="$HOME/.config/opencode-work/opencode.jsonc"' "$work_wrapper" >/dev/null
+    # V2 loads OPENCODE_CONFIG on top of OPENCODE_CONFIG_DIR, so exporting
+    # both would apply the profile config twice.
+    ! grep -F 'export OPENCODE_CONFIG=' "$work_wrapper" >/dev/null
     grep -F 'export OPENCODE_CONFIG_DIR="$HOME/.config/opencode-work"' "$work_wrapper" >/dev/null
+    grep -F "export OPENCODE_CLI_CONFIG_CONTENT='{\"theme\":{\"name\":\"nightowl\"}}'" "$work_wrapper" >/dev/null
     grep -F 'export XDG_DATA_HOME="$HOME/.local/share/opencode-work"' "$work_wrapper" >/dev/null
     grep -F 'export XDG_STATE_HOME="$HOME/.local/state/opencode-work"' "$work_wrapper" >/dev/null
     grep -F '${pkgs.hello}/bin' "$work_wrapper" >/dev/null
     grep -F ' run "$@"' "$work_run_wrapper" >/dev/null
+
+    # Extra profiles get their own V2 service: isolated → 49375, work → 49376
+    # (sorted names); the default profile keeps the stock service.
+    activate=${generation}/activate
+    grep -F 'service set port 49375' "$activate" >/dev/null
+    grep -F 'service set port 49376' "$activate" >/dev/null
+    test "$(grep -c 'service set port' "$activate")" = "2"
+    grep -F 'export XDG_STATE_HOME="$HOME/.local/state/opencode-isolated"' "$activate" >/dev/null
 
     # ── omp tests ──
 
@@ -462,20 +477,16 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     test -f "$oc_code_reviewer"
     test -f "$oc_commit_changes"
 
-    # Agent frontmatter must use permission field with allow values (not boolean tools)
-    grep -F 'bash: allow' "$oc_code_reviewer" >/dev/null
-    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null
-    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null
+    # Agent frontmatter must carry V2 `permissions` rules, mapping Claude Code
+    # tool names to V2 actions (bash→shell, find→glob, search→grep) and
+    # dropping tools V2 lacks (lsp).
+    test "$(yq --front-matter=extract -o=json -I=0 '[.permissions[].action]' "$oc_code_reviewer")" = '["shell","read","glob","grep"]'
+    test "$(yq --front-matter=extract '[.permissions[] | select(.effect != "allow" or .resource != "*")] | length' "$oc_code_reviewer")" = "0"
 
-    # Agent frontmatter must map Claude Code tool names to OpenCode permission names
-    grep -F 'glob: allow' "$oc_code_reviewer" >/dev/null  # find → glob
-    grep -F 'grep: allow' "$oc_code_reviewer" >/dev/null  # search → grep
-
-    # Agent frontmatter must not contain Claude-Code-only fields or deprecated tools field
+    # Agent frontmatter must not contain Claude-Code-only or V1 fields
     ! grep -F 'spawns:' "$oc_code_reviewer" >/dev/null
     ! grep -F 'tools:' "$oc_code_reviewer" >/dev/null
-    ! grep -F 'find: allow' "$oc_code_reviewer" >/dev/null
-    ! grep -F 'search: allow' "$oc_code_reviewer" >/dev/null
+    ! grep -E '^permission:' "$oc_code_reviewer" >/dev/null
     # Command frontmatter must strip allowed-tools (opencode doesn't support it)
     ! grep -F 'allowed-tools:' "$oc_commit_changes" >/dev/null
     # Command frontmatter must keep description

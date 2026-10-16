@@ -82,6 +82,14 @@ let
           fi
         done
         find "$dev_home" -type f -exec sed -i "s|${homeDirectoryPlaceholder}|$dev_home|g" {} +
+
+        # OpenCode V2 runs one background service per state dir on a fixed
+        # port (49374 by default); give this project's service its own port,
+        # derived from the dev home path, so it never collides with the user's.
+        if [ -d "$dev_home/.config/opencode" ]; then
+          path_hash=$(printf '%s' "$dev_home" | cksum | cut -d' ' -f1)
+          printf '{"port": %d}\n' $((49400 + path_hash % 1000)) >"$dev_home/.config/opencode/service.json"
+        fi
       '';
     };
 
@@ -97,7 +105,6 @@ let
     opencode() {
       local dev_home="''${AI_TOOLS_DEV_HOME:-''${PRJ_ROOT:-$PWD}/.ai-tools/home}"
       OPENCODE_CONFIG_DIR="$dev_home/.config/opencode" \
-      OPENCODE_CONFIG="$dev_home/.config/opencode/opencode.jsonc" \
       XDG_STATE_HOME="$dev_home/.local/state" \
       XDG_DATA_HOME="$dev_home/.local/share" \
       command opencode "$@"

@@ -255,32 +255,34 @@ let
     in
     lib.filterAttrs (k: _: k != "") finalAttrs;
 
-  # Convert "bash, read, write" → "permission:\n  bash: allow\n  read: allow\n"
-  # with Claude Code → OpenCode permission name mapping.
-  _toolsToPermissionYaml =
+  # Convert "bash, read, write" → an OpenCode V2 `permissions` YAML list that
+  # allows each tool, mapping Claude Code tool names onto V2 permission actions.
+  # Tools V2 does not have (e.g. `lsp`) map to null and are dropped.
+  _toolsToPermissionsYaml =
     toolsStr:
     let
-      # Claude Code tool names → OpenCode permission names
       toolMap = {
-        bash = "bash";
+        bash = "shell";
         read = "read";
         write = "edit";
         edit = "edit";
         find = "glob";
         search = "grep";
-        lsp = "lsp";
-        task = "task";
-        todowrite = "todowrite";
+        lsp = null;
+        task = "subagent";
+        todowrite = null;
         webfetch = "webfetch";
         websearch = "websearch";
         skill = "skill";
       };
       trimmed = lib.trim toolsStr;
       rawList = if trimmed == "" then [ ] else map lib.trim (lib.splitString "," trimmed);
-      mappedList = map (tool: toolMap.${tool} or tool) rawList;
+      mappedList = lib.filter (action: action != null) (map (tool: toolMap.${tool} or tool) rawList);
       deduped = lib.unique mappedList;
     in
-    lib.concatMapStrings (tool: "  ${tool}: allow\n") deduped;
+    lib.concatMapStrings (
+      action: "  - action: ${action}\n    resource: \"*\"\n    effect: allow\n"
+    ) deduped;
 
   # Rebuild a frontmatter string from an attrset (discard empty values).
   _rebuildFrontmatter =
@@ -289,17 +291,17 @@ let
       lib.mapAttrsToList (k: v: "${k}: ${v}") (lib.filterAttrs (_: v: v != "") attrs)
     );
 
-  # ── Agent: Claude Code → OpenCode ──
+  # ── Agent: Claude Code → OpenCode V2 ──
   convertAgentToOpenCode =
     name: agentText:
     let
       split = _splitFrontmatter agentText;
       fm = _parseFrontmatter split.frontmatter;
-      permYaml = _toolsToPermissionYaml (fm.tools or "");
+      permYaml = lib.removeSuffix "\n" (_toolsToPermissionsYaml (fm.tools or ""));
       newFm = _rebuildFrontmatter {
         description = fm.description or "";
         mode = "subagent";
-        permission = if permYaml == "" then "" else "\n${permYaml}";
+        permissions = if permYaml == "" then "" else "\n${permYaml}";
       };
     in
     if split.frontmatter == "" then agentText else "---\n${newFm}\n---\n\n${split.body}";
@@ -434,8 +436,8 @@ in
     skillFiles = aiSkillFiles;
   };
 
-  # opencode agents/commands use OpenCode's YAML frontmatter format
-  # (tools as YAML map, mode: subagent, no spawns/allowed-tools).
+  # opencode agents/commands use OpenCode V2's YAML frontmatter format
+  # (`permissions` rule list, mode: subagent, no spawns/allowed-tools).
   opencode = {
     agents = convertAgentsToOpenCode aiAgents;
     commands = convertCommandsToOpenCode aiCommands;

@@ -30,7 +30,7 @@
           ai-tools.nixosModules.default
 
           (
-            { config, ... }:
+            { ... }:
             {
               nixpkgs.config.allowUnfree = true; # claude-code / codex are unfree
 
@@ -70,14 +70,6 @@
                     claudeCode.enable = true;
                     opencode.enable = true;
                     omp.enable = true;
-                  };
-
-                  # Point nixd at this system's flake for option completion.
-                  # (Only nixd uses flakePath; the `nixos` MCP server below
-                  # takes no config.)
-                  nixos = {
-                    flakePath = "/home/alice/nix-config";
-                    configurationName = config.networking.hostName;
                   };
 
                   mcp.servers = {

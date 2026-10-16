@@ -218,22 +218,28 @@ let
       // lib.optionalAttrs (server ? args && server.args != [ ]) { args = server.args; }
       // lib.optionalAttrs (server ? env && server.env != { }) { environment = server.env; };
 
+  # OpenCode V2 server entry (placed under `mcp.servers`). Servers connect
+  # unless `disabled`; a single V1-style timeout covers both catalog listing
+  # and tool execution.
   toOpenCode =
     server:
     if server ? url then
       {
         type = "remote";
-        enabled = true;
         url = server.url;
       }
     else
       {
         type = "local";
-        enabled = true;
         command = [ server.command ] ++ (server.args or [ ]);
       }
       // lib.optionalAttrs (server ? env && server.env != { }) { environment = server.env; }
-      // lib.optionalAttrs (server ? timeout) { timeout = server.timeout; };
+      // lib.optionalAttrs (server ? timeout) {
+        timeout = {
+          catalog = server.timeout;
+          execution = server.timeout;
+        };
+      };
 
   toCodex =
     server:

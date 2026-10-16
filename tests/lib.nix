@@ -321,7 +321,6 @@ let
         }).docs;
       expected = {
         type = "remote";
-        enabled = true;
         url = "https://docs.example.test/mcp";
       };
     };

@@ -55,14 +55,6 @@
                 skills.gog.enable = true;
                 skills.mattpocock.enable = false;
 
-                # ── nixd option completion ────────────────────────────────
-                # Point nixd at your NixOS flake for option completion. (Only
-                # nixd uses this; the `nixos` MCP server below takes no config.)
-                nixos = {
-                  flakePath = "/home/alice/nix-config";
-                  configurationName = "workstation";
-                };
-
                 # ── The four agents — enable only what you use ────────────
                 tools = {
                   claudeCode = {
