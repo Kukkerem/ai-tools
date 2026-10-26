@@ -13,6 +13,7 @@ let
         transport = server.transport or "http";
         url = server.url;
       }
+      // lib.optionalAttrs (server ? headers && server.headers != { }) { headers = server.headers; }
     else
       {
         command = server.command;
@@ -26,6 +27,8 @@ let
   jsonFormat = pkgs.formats.json { };
 in
 {
+  inherit toOmp;
+
   forOmp =
     {
       enabledServerNames,

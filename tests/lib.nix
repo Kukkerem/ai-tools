@@ -11,6 +11,7 @@ let
   aiTools = import ../ai-tools { inherit inputs lib pkgs; };
 
   omp = import ../lib/omp.nix { inherit inputs lib pkgs; };
+  ompMcp = import ../lib/omp-mcp.nix { inherit inputs lib pkgs; };
 
   # Read a frontmatter field out of a rendered omp agent markdown file.
   ompAgentField =
@@ -321,6 +322,27 @@ let
         }).docs;
       expected = {
         type = "remote";
+        url = "https://docs.example.test/mcp";
+      };
+    };
+
+    # Remote servers behind auth need request headers passed through to omp.
+    testOmpMcpUrlServerRendersHeaders = {
+      expr = ompMcp.toOmp {
+        url = "https://notes.example.test/mcp";
+        headers.Authorization = "!cat /run/x";
+      };
+      expected = {
+        transport = "http";
+        url = "https://notes.example.test/mcp";
+        headers.Authorization = "!cat /run/x";
+      };
+    };
+
+    testOmpMcpUrlServerOmitsHeadersWhenUnset = {
+      expr = ompMcp.toOmp { url = "https://docs.example.test/mcp"; };
+      expected = {
+        transport = "http";
         url = "https://docs.example.test/mcp";
       };
     };
