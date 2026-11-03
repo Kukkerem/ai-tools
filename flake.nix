@@ -45,7 +45,7 @@
     };
 
     superpowers = {
-      url = "github:obra/superpowers/bb92a77741419a4ab5f06e711a283343f1ada0c3";
+      url = "github:obra/superpowers/22f0b463e7a5e579904dd6211a520321035526f7";
       flake = false;
     };
 
