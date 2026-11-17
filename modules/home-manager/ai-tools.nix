@@ -1252,11 +1252,15 @@ in
           type = types.enum [
             "never"
             "on-failure"
-            "untrusted"
             "on-request"
           ];
-          default = "untrusted";
-          description = "Codex approval policy.";
+          default = "on-request";
+          description = ''
+            Codex approval policy. `untrusted` was retired as a public setting
+            in Codex 0.169.0 and fails config load (`codex-rs/core/src/config/mod.rs`,
+            `UnsupportedUntrustedApprovalPolicyError`); `on-failure` is a serde
+            alias of `on-request`, Codex's own default.
+          '';
         };
       };
 
