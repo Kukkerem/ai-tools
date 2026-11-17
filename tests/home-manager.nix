@@ -454,6 +454,11 @@ pkgs.runCommand "ai-tools-home-manager-tests"
     jq -e '.mcpServers.memory.env.MEMORY_FILE_PATH == "/home/tester/.cache/ai-tools/omp-work/memory.json"' "$omp_work_mcp" >/dev/null
     jq -e '.mcpServers.context7 != null' "$omp_work_mcp" >/dev/null
 
+    # ── codex tests ──
+    # Codex 0.169.0 rejects `approval_policy = "untrusted"` at config load.
+    codex_config=${generation}/home-files/.codex/config.toml
+    test "$(yq -p toml -o yaml '.approval_policy' "$codex_config")" = "on-request"
+
     # Skill, command, and agent categories can be disabled independently.
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/skills/tdd/SKILL.md
     test ! -e ${filteredCommandsAgentsGeneration}/home-files/.omp/agent/commands/review.md
