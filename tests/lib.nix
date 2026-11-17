@@ -326,6 +326,22 @@ let
       };
     };
 
+    # Codex only accepts `url` for streamable HTTP servers; any other key
+    # fails config load with "invalid transport".
+    testCodexMcpExtraServerRemote = {
+      expr =
+        (mcp.forCodex {
+          enabledServerNames = [ ];
+          filesystemAllowedPaths = [ "/tmp/project" ];
+          memoryBaseDir = "/tmp/state";
+          memoryDir = "profile";
+          extraServers.docs.url = "https://docs.example.test/mcp";
+        }).docs;
+      expected = {
+        url = "https://docs.example.test/mcp";
+      };
+    };
+
     # Remote servers behind auth need request headers passed through to omp.
     testOmpMcpUrlServerRendersHeaders = {
       expr = ompMcp.toOmp {

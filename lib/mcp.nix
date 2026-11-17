@@ -221,7 +221,7 @@ let
   toCodex =
     server:
     if server ? url then
-      { serverUrl = server.url; }
+      { url = server.url; }
     else
       {
         command = server.command;
