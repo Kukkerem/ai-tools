@@ -37,17 +37,17 @@
     "caveman": {
       "flake": false,
       "locked": {
-        "lastModified": 1794953899,
-        "narHash": "sha256-qG7njZgc+JCg+AAVNcFmOYjWMIAy73q4BociYG+WsEw=",
+        "lastModified": 1795667356,
+        "narHash": "sha256-CsrSd7i/6+wkGAIDa29KpkYaaJgzhRhAGNnbEFgJ9Fk=",
         "owner": "JuliusBrussee",
         "repo": "caveman",
-        "rev": "a192894723a8f47e7f504c7b5041967ff1f18e55",
+        "rev": "e74a11ccdb38b98d15c9f9545787c907dd15f0ab",
         "type": "github"
       },
       "original": {
         "owner": "JuliusBrussee",
         "repo": "caveman",
-        "rev": "a192894723a8f47e7f504c7b5041967ff1f18e55",
+        "rev": "e74a11ccdb38b98d15c9f9545787c907dd15f0ab",
         "type": "github"
       }
     },
