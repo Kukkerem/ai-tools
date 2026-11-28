@@ -363,6 +363,33 @@ let
       };
     };
 
+    # omp-native keys survive rendering on both transports; omp expands the
+    # env placeholder in `enabled` at discovery.
+    testOmpMcpUrlServerPassesEnabledAndInstructions = {
+      expr = ompMcp.toOmp {
+        url = "http://127.0.0.1:52520/mcp";
+        enabled = "\${GAME_MCP:-false}";
+        instructions = false;
+      };
+      expected = {
+        transport = "http";
+        url = "http://127.0.0.1:52520/mcp";
+        enabled = "\${GAME_MCP:-false}";
+        instructions = false;
+      };
+    };
+
+    testOmpMcpCommandServerPassesEnabled = {
+      expr = ompMcp.toOmp {
+        command = "/bin/tool";
+        enabled = false;
+      };
+      expected = {
+        command = "/bin/tool";
+        enabled = false;
+      };
+    };
+
     testGrantsHelperContainsLoadAndSave = {
       expr =
         let
